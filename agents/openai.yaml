@@ -1,0 +1,7 @@
+interface:
+  display_name: "Qingshan Medical Map Update"
+  short_description: "Review-first medical map CSV update workflow"
+  default_prompt: "Use $qingshan-medical-map-data-update-skill to analyze _local/input/medical-feedback.csv and prepare a review plan before any JSON edits."
+
+policy:
+  allow_implicit_invocation: true

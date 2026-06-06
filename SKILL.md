@@ -1,0 +1,193 @@
+---
+name: qingshan-medical-map-data-update-skill
+description: Local review-first workflow for maintaining Qingshan medical map JSON data from a public Google Sheet CSV. Use when the user says to run the medical map local workflow, sync a public Sheet and analyze it, or process _local/input/medical-feedback.csv; requires a cloned target repo root and human approval before JSON edits.
+---
+
+# Qingshan Medical Map Data Update
+
+Use this skill to process medical map feedback from a public CSV in a cloned
+target repository. Keep the workflow local, auditable, and review-first.
+
+## Preconditions
+
+Require the user to clone the target repository first and run from its root:
+
+```bash
+git clone <target-repo-url>
+cd <target-repo>
+```
+
+The current directory must contain:
+
+```text
+.git/
+src/_data/medicalData.json
+src/_data/medicalChildData.json
+src/_data/medicalAbroadData.json
+```
+
+Stop if the current directory is Desktop, Downloads, a parent directory, or any
+directory that lacks the required repository markers.
+
+Use only this data entrypoint:
+
+```text
+_local/input/medical-feedback.csv
+```
+
+Do not use TSV, Google API, Service Account, OAuth, `.env`, proxy
+configuration, pnpm sync commands, or credentials.
+
+## Start Every Run
+
+First inspect Git state and report anything risky:
+
+```bash
+git status --short --branch
+git branch --show-current
+git remote -v
+```
+
+If CSV sync is needed, choose the platform script:
+
+```powershell
+.\_local\scripts\sync-public-sheet.ps1 -Url "<published-csv-url>"
+```
+
+```bash
+bash ./_local/scripts/sync-public-sheet.sh "<published-csv-url>"
+```
+
+Then read:
+
+```text
+_local/input/medical-feedback.csv
+src/_data/medicalData.json
+src/_data/medicalChildData.json
+src/_data/medicalAbroadData.json
+```
+
+## Phase 1: Read-Only Analysis
+
+Do not edit files in this phase.
+
+Output:
+
+- CSV total data row count.
+- `更新状态` distribution.
+- `分类` distribution.
+- `未更新` rows.
+- `已更新` rows.
+- `无效信息` rows.
+- Missing key field summary.
+- Duplicate checks against existing JSON.
+- Suspected duplicate hospitals or doctors.
+- Rows that need human judgment.
+
+## Phase 2: Row-by-Row Plan
+
+Give a plan for every CSV row. Do not silently ignore any row.
+
+Each row plan must include:
+
+- CSV `序号`.
+- Original `更新状态`.
+- Decision: `更新`, `跳过`, `无效`, or `需要人工判断`.
+- Target file.
+- Add or merge.
+- Target area, hospital, and doctor.
+- How `capacity` should change.
+- Draft `notes`.
+- Reason when not updating.
+- Risks or uncertainties.
+
+Wait for explicit user approval after the plan. Accept approvals such as
+`批准`, `全部批准`, `批准 12、13 行`, or scoped approvals like `只批准广西相关行`.
+
+Without explicit approval, do not modify JSON.
+
+## Approved Edits
+
+After approval, modify only:
+
+```text
+src/_data/medicalData.json
+src/_data/medicalChildData.json
+src/_data/medicalAbroadData.json
+```
+
+Keep JSON valid and use 2-space formatting. Do not add, modify, or delete
+`shares`; those are always maintained manually by the user.
+
+After edits, run:
+
+```bash
+node -e "for (const f of ['src/_data/medicalData.json','src/_data/medicalChildData.json','src/_data/medicalAbroadData.json']) { const text = require('fs').readFileSync(f,'utf8').replace(/^\uFEFF/, ''); JSON.parse(text); console.log(f + ' OK'); }"
+git diff --check
+git status --short --branch
+```
+
+Default to no push and no PR. Commit, push, or create a PR only when the user
+explicitly asks.
+
+## Data Rules
+
+Use `未更新` rows as primary candidates. Report `已更新` rows and skip them by
+default. Report `无效信息` rows and do not write them to JSON by default.
+
+Use `分类` only as an initial signal. Choose the target file by combining
+region, hospital, department, doctor, treatment direction, and feedback notes:
+
+- Adult or general mainland resources: `src/_data/medicalData.json`.
+- Child or adolescent resources: `src/_data/medicalChildData.json`.
+- Overseas or outside-mainland resources: `src/_data/medicalAbroadData.json`.
+
+Merge into existing area, hospital, and doctor entries. Do not duplicate names
+or near-duplicates.
+
+If the doctor name is empty or is `未提及`, `无`, `不详`, `未知`, or `N/A`, do
+not create a placeholder doctor. Prefer hospital-level `notes` when the
+information is useful.
+
+Append only clearly supported `capacity` values. Do not overwrite or delete
+existing values. Normalize order to `ADHD`, then `ASD` when touching a capacity
+array.
+
+Use `就诊评价与详细更新信息` as the main source for public `notes`, but never
+copy raw feedback verbatim. Use links only as human reference; do not write
+them into `shares` automatically. Treat `提取文字`, `内容概括`, `人工审核`,
+`审核时间`, `人工校验`, `校验时间`, and `来源用户` as judgment references, not
+direct JSON fields.
+
+## Notes Style
+
+Write `notes` for map users: concise, accurate, and actionable.
+
+Do not include internal processing traces such as:
+
+- 截图显示
+- 文字被截断
+- 反馈者表示
+- 来源用户
+- 群友说
+- 医生姓名来自截图文字
+- OCR
+- AI 判断
+- 建议后续核对医院挂号页
+
+Prefer cautious public wording:
+
+- 建议就诊前核对医院挂号信息。
+- 确诊检查需另行预约。
+- 成人就诊前建议确认是否接诊。
+- 可作为开药分流选择，建议携带既往确诊材料、处方记录和检查资料。
+- 有反馈提到院内可咨询相关开药情况，建议就诊前或现场确认库存与处方要求。
+
+When the workflow reveals reusable lessons, record problem, cause, and fix in:
+
+```text
+_local/workflow/medical-workflow-lessons.md
+```
+
+Do not record secrets, tokens, credentials, real public CSV URLs, full raw CSV,
+private user data, or full user feedback dumps.
