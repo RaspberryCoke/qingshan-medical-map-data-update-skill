@@ -22,11 +22,12 @@ It must not contain:
 The approved default public CSV URL may be stored as workflow configuration in
 the skill repository. Do not commit raw CSV exports or private feedback.
 
-Before using the skill, check whether the skill repository is up to date. If the
-skill repository can fast-forward to upstream and has a clean worktree, update it
-and stop the current run so Codex can reload the new skill instructions. If the
-skill repository has local changes, stop and report them instead of pulling over
-local work.
+Before using the skill, check whether the installed Codex skill version in
+`.codex-skill-version.json` matches the latest `main` version. If not, reinstall
+only `~/.codex/skills/qingshan-medical-map-data-update-skill` from the remote
+repository's tracked files and stop the current run so Codex can reload the new
+skill instructions. If the skill repository is itself a Git checkout with local
+changes, stop and report them instead of pulling over local work.
 
 ## Target Repository
 

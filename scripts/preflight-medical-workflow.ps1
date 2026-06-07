@@ -146,8 +146,19 @@ function Update-SkillIfNeeded {
     Write-Warning 'Skill root is unknown; skipping automatic skill update check.'
     return
   }
+
+  $updaterScript = Join-Path $PSScriptRoot 'update-installed-skill.ps1'
+  if (-not (Test-Path -LiteralPath $updaterScript)) {
+    $updaterScript = Join-Path $resolvedSkillRoot 'scripts/update-installed-skill.ps1'
+  }
+  if (Test-Path -LiteralPath $updaterScript) {
+    & $updaterScript -InstalledSkillRoot $resolvedSkillRoot
+  } else {
+    Write-Warning 'Installed skill updater script is unavailable; falling back to Git repository update check.'
+  }
+
   if (-not (Test-Path -LiteralPath (Join-Path $resolvedSkillRoot '.git'))) {
-    Write-Warning "Skill root is not a Git repository; skipping automatic skill update check: $resolvedSkillRoot"
+    Write-Host "Installed skill version check passed. Skill root is not a Git repository: $resolvedSkillRoot"
     return
   }
 

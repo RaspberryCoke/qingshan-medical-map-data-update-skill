@@ -52,6 +52,7 @@ _local/input/medical-feedback.csv
 preflight 必须：
 
 - 检查 skill 仓库是否落后 upstream；如果自动 fast-forward 更新了 skill，立即停止并要求重启 Codex 或重新开始任务。
+- 检查已安装 Codex skill 目录中的 `.codex-skill-version.json` 是否等于远端 `main` 最新版本；如果不是最新，卸载并重装 `~/.codex/skills/qingshan-medical-map-data-update-skill` 后立即停止。
 - 如果 skill 仓库有本地改动，停止并报告，不能自动覆盖。
 - 确认目标仓库 root、`origin`、`git`、`gh auth status` 和 `node`。
 - 缺少 `_local/` 时自动创建本地工作区并同步 CSV。

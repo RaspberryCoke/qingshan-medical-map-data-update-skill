@@ -59,6 +59,7 @@ $skillRoot = Resolve-SkillRoot
 Copy-RequiredFile -Source (Join-Path $skillRoot 'scripts/sync-public-sheet.ps1') -Destination '_local/scripts/sync-public-sheet.ps1'
 Copy-RequiredFile -Source (Join-Path $skillRoot 'scripts/validate-local-workspace.ps1') -Destination '_local/scripts/validate-local-workspace.ps1'
 Copy-RequiredFile -Source (Join-Path $skillRoot 'scripts/preflight-medical-workflow.ps1') -Destination '_local/scripts/preflight-medical-workflow.ps1'
+Copy-RequiredFile -Source (Join-Path $skillRoot 'scripts/update-installed-skill.ps1') -Destination '_local/scripts/update-installed-skill.ps1'
 Copy-RequiredFile -Source (Join-Path $skillRoot 'templates/medical-data-workflow.md') -Destination '_local/workflow/medical-data-workflow.md'
 Copy-RequiredFile -Source (Join-Path $skillRoot 'templates/RUNBOOK.md') -Destination '_local/workflow/RUNBOOK.md'
 Copy-RequiredFile -Source (Join-Path $skillRoot 'templates/medical-workflow-lessons.md') -Destination '_local/workflow/medical-workflow-lessons.md'
@@ -71,7 +72,7 @@ if (Test-Path -LiteralPath '.gitignore') {
 
 Write-Host 'Local medical map workspace initialized.'
 Write-Host 'Created or verified: _local/input, _local/scripts, _local/logs, _local/workflow'
-Write-Host 'Copied Windows workflow scripts, preflight, and templates.'
+Write-Host 'Copied Windows workflow scripts, updater, preflight, and templates.'
 
 if ($gitignoreMissing) {
   Write-Warning 'The target repository .gitignore does not appear to ignore /_local/. Add this line manually if needed: /_local/'

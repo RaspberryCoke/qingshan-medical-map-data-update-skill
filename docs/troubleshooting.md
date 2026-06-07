@@ -60,10 +60,13 @@ Do not keep retrying auth refresh inside the agent shell after the first timeout
 
 ## Skill self-update stops the workflow
 
-The preflight checks whether the skill repository is behind its upstream. If it
-fast-forward updates the skill, it stops immediately because the current Codex
-run may still have loaded the older instructions. Restart Codex or start a new
-run, then execute the workflow again.
+The preflight checks `.codex-skill-version.json` in the installed Codex skill
+directory against the latest `main` version. If the installed version is stale,
+it removes and reinstalls only
+`~/.codex/skills/qingshan-medical-map-data-update-skill` from the remote
+repository's tracked files, then stops immediately because the current Codex run
+may still have loaded the older instructions. Restart Codex or start a new run,
+then execute the workflow again.
 
 If the skill repository has local changes, preflight stops without pulling.
 Commit, stash, or discard those changes intentionally before re-running

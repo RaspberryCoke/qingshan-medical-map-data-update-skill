@@ -34,7 +34,7 @@ src/_data/medicalChildData.json
 src/_data/medicalAbroadData.json
 ```
 
-并且必须检查 skill 仓库是否已落后 upstream。若 skill 被 fast-forward 更新，停止当前流程，让用户重启 Codex 或重新开始任务后再继续。若 skill 仓库有本地改动，停止并报告。
+并且必须检查已安装 Codex skill 的 `.codex-skill-version.json` 是否等于远端 `main` 最新版本；若不是最新，卸载并重装 `~/.codex/skills/qingshan-medical-map-data-update-skill` 后停止当前流程，让用户重启 Codex 或重新开始任务后再继续。若 skill 仓库有本地改动，停止并报告。
 
 preflight 还必须检查 `git`、`gh auth status`、`node`，确认 `origin` 指向 `ittuann/qingshanasd`，拉取最新 `main`，并创建或切换到 `codex/<task-slug>` 分支。
 

@@ -96,6 +96,10 @@ The preflight script:
 - Checks whether the skill repository is behind its upstream. If it fast-forward
   updates the skill, it stops and asks you to restart Codex or start a new run
   so the updated instructions are loaded.
+- Checks `.codex-skill-version.json` in the installed Codex skill directory
+  against the latest `main` version. If it is outdated, it removes and reinstalls
+  only `~/.codex/skills/qingshan-medical-map-data-update-skill` from the remote
+  repository's tracked files, then stops so Codex can reload the updated skill.
 - Stops when the skill repository has local changes.
 - Confirms the target repository root, `origin`, required tools, and `gh auth
   status`.

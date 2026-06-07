@@ -51,6 +51,10 @@ Before processing data, run strict preflight. The preflight must:
 - Check whether this skill repository can fast-forward to its upstream. If it
   updates the skill, stop and ask the user to restart Codex or start a new run
   so the updated instructions are loaded.
+- Check `.codex-skill-version.json` in the installed Codex skill directory
+  against the latest `main` version. If the installed version is not current,
+  uninstall and reinstall the installed skill from the tracked files on GitHub,
+  then stop and ask the user to restart Codex or start a new run.
 - Stop if the skill repository has local changes.
 - Confirm the current directory is the target repository root with `.git/` and
   the three required JSON files.
@@ -244,6 +248,26 @@ with `HTTP_PROXY=http://127.0.0.1:7890` and
 When a Git operation still fails, try an equivalent `gh` path when possible. If
 `gh auth refresh` times out in a non-interactive shell, tell the user to run
 `gh auth refresh` or `gh auth login` locally, then re-check `gh auth status`.
+
+## Skill Version Updates
+
+The installed Codex skill version is recorded in:
+
+```text
+.codex-skill-version.json
+```
+
+When the preflight updater finds that the installed version differs from the
+latest `main` version, it must reinstall the Codex skill directory from the
+remote repository's tracked files. The updater must only reinstall:
+
+```text
+~/.codex/skills/qingshan-medical-map-data-update-skill
+```
+
+It must not touch the target `qingshanasd` repository data. After reinstalling,
+stop immediately because the current Codex run may still have loaded older skill
+instructions.
 
 ## Commit Guard
 

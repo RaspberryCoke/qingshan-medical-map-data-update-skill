@@ -4,6 +4,7 @@ set -euo pipefail
 task_slug="update-medical-map-data-$(date +%Y%m%d)"
 expected_origin="ittuann/qingshanasd"
 skill_root=""
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 published_csv_url="https://docs.google.com/spreadsheets/d/e/2PACX-1vRxiGx8JadZ-HPRJBb8-PMscizOv-4UpMqa56XZOhvr8ddkS99vm7hFJ-yee7c3btGrR4eXPRW_SAdi/pub?gid=1596563937&single=true&output=csv"
 skip_skill_update=0
 skip_csv_sync=0
@@ -159,8 +160,19 @@ update_skill_if_needed() {
     printf 'Warning: skill root is unknown; skipping automatic skill update check.\n' >&2
     return
   fi
+
+  local updater_script="$script_dir/update-installed-skill.sh"
+  if [[ ! -f "$updater_script" ]]; then
+    updater_script="$resolved_skill_root/scripts/update-installed-skill.sh"
+  fi
+  if [[ -f "$updater_script" ]]; then
+    bash "$updater_script" --installed-skill-root "$resolved_skill_root"
+  else
+    printf 'Warning: installed skill updater script is unavailable; falling back to Git repository update check.\n' >&2
+  fi
+
   if [[ ! -d "$resolved_skill_root/.git" ]]; then
-    printf 'Warning: skill root is not a Git repository; skipping automatic skill update check: %s\n' "$resolved_skill_root" >&2
+    printf 'Installed skill version check passed. Skill root is not a Git repository: %s\n' "$resolved_skill_root"
     return
   fi
   if [[ -n "$(git -C "$resolved_skill_root" status --porcelain)" ]]; then
