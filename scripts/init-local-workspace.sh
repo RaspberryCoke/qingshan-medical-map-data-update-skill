@@ -39,9 +39,11 @@ mkdir -p _local/input _local/scripts _local/logs _local/workflow
 
 copy_required_file "$skill_root/scripts/sync-public-sheet.sh" "_local/scripts/sync-public-sheet.sh"
 copy_required_file "$skill_root/scripts/validate-local-workspace.sh" "_local/scripts/validate-local-workspace.sh"
+copy_required_file "$skill_root/scripts/preflight-medical-workflow.sh" "_local/scripts/preflight-medical-workflow.sh"
 copy_required_file "$skill_root/templates/medical-data-workflow.md" "_local/workflow/medical-data-workflow.md"
 copy_required_file "$skill_root/templates/RUNBOOK.md" "_local/workflow/RUNBOOK.md"
 copy_required_file "$skill_root/templates/medical-workflow-lessons.md" "_local/workflow/medical-workflow-lessons.md"
+printf '%s\n' "$skill_root" > "_local/workflow/skill-root.txt"
 
 if [[ ! -f ".gitignore" ]] || ! grep -Eq '^[[:space:]]*/_local/[[:space:]]*$' .gitignore; then
   printf 'Warning: the target repository .gitignore does not appear to ignore /_local/.\n' >&2
@@ -50,5 +52,5 @@ fi
 
 printf 'Local medical map workspace initialized.\n'
 printf 'Created or verified: _local/input, _local/scripts, _local/logs, _local/workflow\n'
-printf 'Copied Bash workflow scripts and templates.\n'
+printf 'Copied Bash workflow scripts, preflight, and templates.\n'
 printf 'Do not commit _local/, CSV exports, logs, credentials, or local workflow scratch files to the target repository.\n'

@@ -9,6 +9,10 @@ $jsonFiles = @(
   'src/_data/medicalChildData.json',
   'src/_data/medicalAbroadData.json'
 )
+$allowedStagedFiles = @{}
+foreach ($jsonFile in $jsonFiles) {
+  $allowedStagedFiles[$jsonFile] = $true
+}
 $requiredHeaderBase64 = @(
   '5bqP5Y+3',
   '5pu05paw54q25oCB',
@@ -80,11 +84,28 @@ foreach ($jsonFile in $jsonFiles) {
 
 git status --short --branch
 
+$stagedFiles = git diff --cached --name-only
+if ($LASTEXITCODE -ne 0) {
+  throw 'Could not inspect staged files.'
+}
+foreach ($stagedFile in $stagedFiles) {
+  if (-not $allowedStagedFiles.ContainsKey($stagedFile)) {
+    throw "Unexpected staged file for a medical data commit: $stagedFile"
+  }
+}
+
 Write-Host ''
 Write-Host 'Validation complete.'
-Write-Host 'Before committing target repository changes, confirm these are not staged or committed:'
+Write-Host 'Staged file guard passed. Medical data commits may include only:'
+foreach ($jsonFile in $jsonFiles) {
+  Write-Host "- $jsonFile"
+}
+Write-Host ''
+Write-Host 'Never stage or commit:'
 Write-Host '- _local/'
 Write-Host '- .codex/'
+Write-Host '- .learnings/'
+Write-Host '- skill files, scripts, or docs'
 Write-Host '- CSV / TSV'
 Write-Host '- logs'
 Write-Host '- .env'

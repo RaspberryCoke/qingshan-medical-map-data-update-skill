@@ -35,17 +35,60 @@ Use only this data entrypoint:
 _local/input/medical-feedback.csv
 ```
 
-Do not use TSV, Google API, Service Account, OAuth, `.env`, proxy
+Do not use TSV, Google API, Service Account, OAuth, `.env`, persistent proxy
 configuration, pnpm sync commands, or credentials.
+
+The approved default public CSV URL for this workflow is:
+
+```text
+https://docs.google.com/spreadsheets/d/e/2PACX-1vRxiGx8JadZ-HPRJBb8-PMscizOv-4UpMqa56XZOhvr8ddkS99vm7hFJ-yee7c3btGrR4eXPRW_SAdi/pub?gid=1596563937&single=true&output=csv
+```
 
 ## Start Every Run
 
-First inspect Git state and report anything risky:
+Before processing data, run strict preflight. The preflight must:
+
+- Check whether this skill repository can fast-forward to its upstream. If it
+  updates the skill, stop and ask the user to restart Codex or start a new run
+  so the updated instructions are loaded.
+- Stop if the skill repository has local changes.
+- Confirm the current directory is the target repository root with `.git/` and
+  the three required JSON files.
+- Confirm `origin` points to `ittuann/qingshanasd`, or stop and report the
+  mismatch.
+- Check `git`, `gh`, `gh auth status`, and `node`.
+- Initialize `_local/input`, `_local/scripts`, `_local/logs`, and
+  `_local/workflow` when missing.
+- Sync `_local/input/medical-feedback.csv` from the approved/default public CSV
+  URL when the CSV is missing.
+- Switch to `main`, run `git pull --ff-only origin main`, and create or switch
+  to a normalized `codex/<task-slug>` branch.
+
+Use the platform preflight when it is available:
+
+```powershell
+.\_local\scripts\preflight-medical-workflow.ps1 -TaskSlug "update-medical-map-data-YYYYMMDD"
+```
+
+```bash
+bash ./_local/scripts/preflight-medical-workflow.sh --task-slug "update-medical-map-data-YYYYMMDD"
+```
+
+If preflight is unavailable, do the same checks manually. First inspect Git
+state and report anything risky:
 
 ```bash
 git status --short --branch
 git branch --show-current
 git remote -v
+```
+
+Then run:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c codex/<task-slug>
 ```
 
 If CSV sync is needed, choose the platform script:
@@ -76,9 +119,10 @@ Output:
 - CSV total data row count.
 - `更新状态` distribution.
 - `分类` distribution.
-- `未更新` rows.
-- `已更新` rows.
-- `无效信息` rows.
+- `未更新` rows as update candidates.
+- `无效信息` rows as reported skips unless the user explicitly approves work on
+  them.
+- `已更新` rows as count-only skips unless the user explicitly requests an audit.
 - Missing key field summary.
 - Duplicate checks against existing JSON.
 - Suspected duplicate hospitals or doctors.
@@ -86,7 +130,10 @@ Output:
 
 ## Phase 2: Row-by-Row Plan
 
-Give a plan for every CSV row. Do not silently ignore any row.
+Give a plan for every default candidate row. By default, candidate rows are
+`未更新`; report `无效信息` rows as skipped, and report `已更新` rows as skipped
+without duplicate checks or row plans unless the user explicitly requests an
+audit.
 
 Each row plan must include:
 
@@ -133,7 +180,9 @@ explicitly asks.
 ## Data Rules
 
 Use `未更新` rows as primary candidates. Report `已更新` rows and skip them by
-default. Report `无效信息` rows and do not write them to JSON by default.
+default without duplicate checks or row plans. Report `无效信息` rows and do not
+write them to JSON by default unless the user explicitly approves a scoped
+exception.
 
 Use `分类` only as an initial signal. Choose the target file by combining
 region, hospital, department, doctor, treatment direction, and feedback notes:
@@ -183,11 +232,74 @@ Prefer cautious public wording:
 - 可作为开药分流选择，建议携带既往确诊材料、处方记录和检查资料。
 - 有反馈提到院内可咨询相关开药情况，建议就诊前或现场确认库存与处方要求。
 
+## Network And GitHub Recovery
+
+On Git, GitHub, or network failures, inspect `HTTP_PROXY`, `HTTPS_PROXY`,
+`ALL_PROXY`, lowercase variants, and Git proxy config. If proxy variables are
+set, retry the failing GitHub command once with proxy variables cleared. If
+direct access fails, check whether `127.0.0.1:7890` is reachable and retry once
+with `HTTP_PROXY=http://127.0.0.1:7890` and
+`HTTPS_PROXY=http://127.0.0.1:7890`.
+
+When a Git operation still fails, try an equivalent `gh` path when possible. If
+`gh auth refresh` times out in a non-interactive shell, tell the user to run
+`gh auth refresh` or `gh auth login` locally, then re-check `gh auth status`.
+
+## Commit Guard
+
+Medical data commits may include only:
+
+```text
+src/_data/medicalData.json
+src/_data/medicalChildData.json
+src/_data/medicalAbroadData.json
+```
+
+Before committing, inspect:
+
+```bash
+git diff --cached --name-only
+```
+
+Stop if staged files include `_local/`, `.learnings/`, skill files, scripts,
+docs, CSV/TSV files, logs, credentials, package files, lockfiles, hooks, or
+unrelated source files.
+
+## Publishing Strategy
+
+Default to pushing a `codex/<task-slug>` branch and opening a draft PR only when
+the user explicitly asks for publishing. If upstream push fails because the
+authenticated account lacks write permission, push to the user's fork and open a
+cross-repo PR. If a fork PR has passing GitHub Actions but Vercel reports
+`Authorization required to deploy`, explain that the deployment preview is
+blocked by authorization and is not necessarily a code build failure.
+
+Only merge directly to upstream `main` after the user explicitly confirms direct
+upstream permission and requests direct merge, and only after validation/checks
+pass. Delete a temporary branch only when it is fully merged and has no unpushed
+commits.
+
+## Self-Audit And Difficult Problems
+
 When the workflow reveals reusable lessons, record problem, cause, and fix in:
 
 ```text
 _local/workflow/medical-workflow-lessons.md
 ```
 
-Do not record secrets, tokens, credentials, real public CSV URLs, full raw CSV,
-private user data, or full user feedback dumps.
+For user-corrected workflow rules, command/auth/network failures, or new skill
+capability requests, also use the available self-improvement process and record
+only reusable, non-sensitive lessons. Do not record secrets, tokens,
+credentials, full raw CSV, private user data, or full user feedback dumps. The
+approved default public CSV URL may be recorded as a public workflow
+configuration value.
+
+If the user asks for `self-audit/report-issue`, or a run has repeated
+corrections/failures, read `.learnings/`, current Git status, related PR/CI
+state, and existing issues in this skill repository before creating a new issue.
+Exclude secrets, tokens, raw CSV, and private feedback by default.
+
+For a difficult blocker that cannot be solved, create an issue in this skill
+repository with background, reproduction steps, actual result, expected result,
+diagnosis, attempted fixes, impact, and suggested fix. If the blocker is later
+solved, comment with the root cause and resolution, then close the issue.
