@@ -6,7 +6,7 @@
 
 - 当前唯一数据入口是 `_local/input/medical-feedback.csv`。
 - CSV 来自 Google Sheet “发布到网络”的公开 CSV 链接。
-- 不使用 Google API、Service Account、OAuth、`.env`、代理配置、TSV 或 pnpm 同步命令。
+- 不使用 Google API、Service Account、OAuth、`.env`、持久化代理配置、TSV 或 pnpm 同步命令。
 - `_local/` 是目标仓库忽略的本地工作区，可以由用户手动作为独立本地 Git 仓库维护。
 - 目标仓库不要提交 `_local/`、`.codex/`、同步脚本、CSV/TSV、日志、`.env`、凭据、代理配置、package 文件、lockfile、git hook 或 `pnpm-workspace.yaml`。
 - `shares` 永远由用户手动维护；Codex 不新增、不修改、不删除。
@@ -15,15 +15,17 @@
 
 ## 开始前检查
 
-先运行并向用户报告：
+先运行 preflight：
 
-```bash
-git status --short --branch
-git branch --show-current
-git remote -v
+```powershell
+.\_local\scripts\preflight-medical-workflow.ps1 -TaskSlug "update-medical-map-data-YYYYMMDD"
 ```
 
-确认当前目录包含：
+```bash
+bash ./_local/scripts/preflight-medical-workflow.sh --task-slug "update-medical-map-data-YYYYMMDD"
+```
+
+preflight 必须确认：
 
 ```text
 .git/
@@ -32,9 +34,13 @@ src/_data/medicalChildData.json
 src/_data/medicalAbroadData.json
 ```
 
+并且必须检查已安装 Codex skill 的 `.codex-skill-version.json` 是否等于远端 `main` 最新版本；若不是最新，卸载并重装 `~/.codex/skills/qingshan-medical-map-data-update-skill` 后停止当前流程，让用户重启 Codex 或重新开始任务后再继续。若 skill 仓库有本地改动，停止并报告。
+
+preflight 还必须检查 `git`、`gh auth status`、`node`，确认 `origin` 指向 `ittuann/qingshanasd`，拉取最新 `main`，并创建或切换到 `codex/<task-slug>` 分支。
+
 ## 同步公开 CSV
 
-如果用户提供公开 CSV 链接，根据系统选择：
+如果 `_local/input/medical-feedback.csv` 不存在，preflight 默认使用已批准的公开 CSV URL 同步。用户也可以提供公开 CSV 链接，根据系统选择：
 
 ```powershell
 .\_local\scripts\sync-public-sheet.ps1 -Url "<published-csv-url>"
@@ -88,9 +94,9 @@ _local/input/medical-feedback.csv
 - CSV 总行数。
 - `更新状态` 分布。
 - `分类` 分布。
-- `未更新` 行。
-- `已更新` 行。
-- `无效信息` 行。
+- `未更新` 行作为默认候选。
+- `无效信息` 行作为默认跳过项。
+- `已更新` 行作为默认跳过统计项；除非用户明确要求 audit，否则不做查重或逐行方案。
 - 关键字段缺失情况。
 - 和现有 JSON 的查重情况。
 - 疑似重复医院 / 医生。
@@ -98,7 +104,7 @@ _local/input/medical-feedback.csv
 
 ## 第二阶段：逐行处理方案
 
-必须对每一行给出处理方案，不能静默忽略任何行。
+必须对默认候选行给出处理方案，不能静默忽略候选行。默认候选行是 `未更新`；`无效信息` 默认报告并跳过，`已更新` 默认只统计和跳过，除非用户要求 audit。
 
 每行方案必须包含：
 
@@ -134,3 +140,23 @@ git status --short --branch
 ```
 
 默认不 push，不自动创建 PR。只有用户明确要求时才 commit、push 或 PR。
+
+提交前必须运行：
+
+```bash
+git diff --cached --name-only
+```
+
+医疗数据提交只能包含：
+
+```text
+src/_data/medicalData.json
+src/_data/medicalChildData.json
+src/_data/medicalAbroadData.json
+```
+
+如包含 `_local/`、`.learnings/`、skill 文件、脚本、文档、CSV/TSV、日志、凭据、package 文件、lockfile、hook 或其他无关文件，必须停止。
+
+## GitHub 连接恢复
+
+GitHub 连接失败时，检查 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、小写变量以及 Git proxy config。当前设置了代理却失败时，先临时清空代理重试一次；直连失败后，再检查 `127.0.0.1:7890` 是否可达，并用 `HTTP_PROXY=http://127.0.0.1:7890`、`HTTPS_PROXY=http://127.0.0.1:7890` 重试一次。仍失败时，尝试等价 `gh` 路径；如果都失败，明确报告已尝试的路径。

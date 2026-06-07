@@ -7,15 +7,19 @@
 当用户要求执行医疗地图本地工作流时：
 
 1. 确认当前目录是 clone 后的目标仓库根目录。
-2. 运行：
+2. 优先运行 preflight：
 
    ```bash
-   git status --short --branch
-   git branch --show-current
-   git remote -v
+   bash ./_local/scripts/preflight-medical-workflow.sh --task-slug "update-medical-map-data-YYYYMMDD"
    ```
 
-3. 如需要同步数据，运行公开 CSV 下载脚本。
+   Windows:
+
+   ```powershell
+   .\_local\scripts\preflight-medical-workflow.ps1 -TaskSlug "update-medical-map-data-YYYYMMDD"
+   ```
+
+3. 如果 preflight 更新了 skill 仓库，停止当前流程，重启 Codex 或重新开始任务后再继续。
 4. 读取 `_local/input/medical-feedback.csv`。
 5. 读取三个目标 JSON。
 6. 先输出整体分析和逐行处理方案。
@@ -39,15 +43,27 @@ _local/input/medical-feedback.csv
 - Service Account
 - OAuth
 - `pnpm sync:sheet`
-- 代理配置
+- 持久化代理配置
 
-公开 CSV 链接由用户在运行脚本时提供，不写入目标仓库或本地日志。
+公开 CSV 链接默认使用已批准的工作流配置，也可由用户在运行脚本时覆盖。不要把原始 CSV、私密反馈或日志提交到目标仓库。
+
+## Preflight 要求
+
+preflight 必须：
+
+- 检查 skill 仓库是否落后 upstream；如果自动 fast-forward 更新了 skill，立即停止并要求重启 Codex 或重新开始任务。
+- 检查已安装 Codex skill 目录中的 `.codex-skill-version.json` 是否等于远端 `main` 最新版本；如果不是最新，卸载并重装 `~/.codex/skills/qingshan-medical-map-data-update-skill` 后立即停止。
+- 如果 skill 仓库有本地改动，停止并报告，不能自动覆盖。
+- 确认目标仓库 root、`origin`、`git`、`gh auth status` 和 `node`。
+- 缺少 `_local/` 时自动创建本地工作区并同步 CSV。
+- 切到 `main`，执行 `git pull --ff-only origin main`，再创建或切换到 `codex/<task-slug>` 分支。
+- GitHub 连接失败时，先在当前有代理的情况下尝试不走代理；直连失败后再尝试 `127.0.0.1:7890`。
 
 ## 处理原则
 
-- `未更新` 行是主要候选。
-- `已更新` 行默认不修改，但分析报告里要说明。
-- `无效信息` 默认不写入 JSON，但要说明判断。
+- `未更新` 行是默认处理候选。
+- `已更新` 行默认只统计和跳过，不做查重或逐行方案；只有用户要求 audit 时才展开。
+- `无效信息` 默认报告并跳过，除非用户明确批准处理。
 - `分类` 只作初筛，目标文件还要结合地区、医院、科室、医生、诊疗方向和备注判断。
 - `shares` 永远由用户手动维护；Codex 不新增、不修改、不删除。
 - 没有医生姓名但信息有效时，优先考虑医院级 `notes`，不要生成占位医生。
@@ -62,7 +78,7 @@ _local/input/medical-feedback.csv
 
 ## 修改前必须输出方案
 
-实际编辑 JSON 前，逐行给出：
+实际编辑 JSON 前，对默认候选行逐行给出：
 
 1. CSV 序号。
 2. 目标文件。
@@ -105,3 +121,17 @@ git status --short --branch
 - 代理配置
 - git hook
 - `pnpm-workspace.yaml`
+
+提交前必须检查：
+
+```bash
+git diff --cached --name-only
+```
+
+医疗数据提交只能包含三份 JSON：
+
+```text
+src/_data/medicalData.json
+src/_data/medicalChildData.json
+src/_data/medicalAbroadData.json
+```

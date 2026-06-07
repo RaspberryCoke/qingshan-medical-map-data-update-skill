@@ -6,10 +6,12 @@ changes.
 ## CSV Status
 
 - `未更新`: primary update candidates.
-- `已更新`: skip by default, but report them and explain why no change is needed.
-- `无效信息`: do not write to JSON by default, but report the row and reason.
-- Any row that matches existing JSON exactly still needs a visible
-  "no update required" explanation.
+- `已更新`: skip by default as count-only/report-only rows. Do not duplicate
+  check them or produce row plans unless the user explicitly requests an audit.
+- `无效信息`: do not write to JSON by default, but report the row and reason
+  unless the user explicitly approves a scoped exception.
+- `未更新` rows that match existing JSON exactly still need a visible
+  "no update required" explanation in the candidate row plan.
 
 ## Target Files
 

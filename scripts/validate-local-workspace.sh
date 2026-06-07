@@ -7,6 +7,11 @@ json_files=(
   "src/_data/medicalChildData.json"
   "src/_data/medicalAbroadData.json"
 )
+allowed_staged_files=(
+  "src/_data/medicalData.json"
+  "src/_data/medicalChildData.json"
+  "src/_data/medicalAbroadData.json"
+)
 required_headers=(
   "序号"
   "更新状态"
@@ -50,12 +55,35 @@ done
 
 git status --short --branch
 
+if staged_files="$(git diff --cached --name-only)"; then
+  while IFS= read -r staged_file; do
+    [[ -n "$staged_file" ]] || continue
+    allowed=0
+    for allowed_staged_file in "${allowed_staged_files[@]}"; do
+      if [[ "$staged_file" == "$allowed_staged_file" ]]; then
+        allowed=1
+        break
+      fi
+    done
+    [[ "$allowed" -eq 1 ]] || fail "Unexpected staged file for a medical data commit: $staged_file"
+  done <<< "$staged_files"
+else
+  fail "Could not inspect staged files."
+fi
+
 cat <<'EOF'
 
 Validation complete.
-Before committing target repository changes, confirm these are not staged or committed:
+Staged file guard passed. Medical data commits may include only:
+- src/_data/medicalData.json
+- src/_data/medicalChildData.json
+- src/_data/medicalAbroadData.json
+
+Never stage or commit:
 - _local/
 - .codex/
+- .learnings/
+- skill files, scripts, or docs
 - CSV / TSV
 - logs
 - .env

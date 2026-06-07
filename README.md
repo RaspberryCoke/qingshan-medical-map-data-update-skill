@@ -12,13 +12,16 @@ map JSON, and apply only manually approved data updates.
 - Not a fully automated repository editing tool.
 - Not a cloud sync service.
 - Not a replacement for human review.
-- Not a Google API, Service Account, OAuth, `.env`, proxy, or pnpm workflow.
-- Not a place to store real CSV files, public CSV URLs, logs, credentials, or
-  private user feedback.
+- Not a Google API, Service Account, OAuth, `.env`, persistent proxy, or pnpm
+  workflow.
+- Not a place to store real CSV files, logs, credentials, or private user
+  feedback. The approved public CSV URL is documented as workflow
+  configuration; raw CSV exports still must not be committed.
 
 ## Requirements
 
 - Git.
+- GitHub CLI (`gh`) with an authenticated session.
 - Node.js, used only for JSON parse validation.
 - Windows PowerShell 5.1+ on Windows, or Bash on Linux/macOS.
 - A cloned target repository with these files:
@@ -45,7 +48,7 @@ directory of the clone.
 git clone <target-repo-url>
 cd <target-repo>
 .\path\to\skill\scripts\init-local-workspace.ps1
-.\_local\scripts\sync-public-sheet.ps1 -Url "<published-csv-url>"
+.\_local\scripts\preflight-medical-workflow.ps1 -TaskSlug "update-medical-map-data-YYYYMMDD"
 .\_local\scripts\validate-local-workspace.ps1
 ```
 
@@ -61,7 +64,7 @@ Then ask Codex:
 git clone <target-repo-url>
 cd <target-repo>
 bash /path/to/skill/scripts/init-local-workspace.sh
-bash ./_local/scripts/sync-public-sheet.sh "<published-csv-url>"
+bash ./_local/scripts/preflight-medical-workflow.sh --task-slug "update-medical-map-data-YYYYMMDD"
 bash ./_local/scripts/validate-local-workspace.sh
 ```
 
@@ -83,8 +86,30 @@ _local/logs/
 _local/workflow/
 ```
 
-It copies the platform-specific sync and validation scripts into
-`_local/scripts/`, and copies workflow templates into `_local/workflow/`.
+It copies the platform-specific preflight, sync, and validation scripts into
+`_local/scripts/`, copies workflow templates into `_local/workflow/`, and writes
+the local skill repository path to `_local/workflow/skill-root.txt` so preflight
+can check whether the skill itself is up to date.
+
+The preflight script:
+
+- Checks whether the skill repository is behind its upstream. If it fast-forward
+  updates the skill, it stops and asks you to restart Codex or start a new run
+  so the updated instructions are loaded.
+- Checks `.codex-skill-version.json` in the installed Codex skill directory
+  against the latest `main` version. If it is outdated, it removes and reinstalls
+  only `~/.codex/skills/qingshan-medical-map-data-update-skill` from the remote
+  repository's tracked files, then stops so Codex can reload the updated skill.
+- Stops when the skill repository has local changes.
+- Confirms the target repository root, `origin`, required tools, and `gh auth
+  status`.
+- Initializes missing `_local/` directories and syncs
+  `_local/input/medical-feedback.csv` from the approved/default public CSV URL
+  when the CSV is missing.
+- Switches the target repository to latest `main` and creates or switches to a
+  normalized `codex/<task-slug>` branch.
+- On GitHub connection failures, retries once without proxy when proxy
+  variables are set, then tries `127.0.0.1:7890` when reachable.
 
 If the target repository `.gitignore` does not ignore `/_local/`, the
 initializer prints a reminder. It does not edit `.gitignore` automatically.
@@ -93,7 +118,8 @@ initializer prints a reminder. It does not edit `.gitignore` automatically.
 
 - The maintainer must clone the target repository first.
 - The maintainer must initialize `_local/` from the target repository root.
-- The maintainer must provide the public CSV URL at sync time.
+- The maintainer may override the approved/default public CSV URL at preflight
+  or sync time.
 - The maintainer must review Codex's row-by-row plan before any JSON changes.
 
 The human review gate remains mandatory because feedback can be ambiguous,
