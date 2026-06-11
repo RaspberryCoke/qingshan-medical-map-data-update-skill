@@ -66,7 +66,7 @@ Before processing data, run strict preflight. The preflight must:
 - Sync `_local/input/medical-feedback.csv` from the approved/default public CSV
   URL when the CSV is missing.
 - Switch to `main`, run `git pull --ff-only origin main`, and create or switch
-  to a normalized `codex/<task-slug>` branch.
+  to one short-lived normalized `codex/<task-slug>` branch for this task.
 
 Use the platform preflight when it is available:
 
@@ -285,23 +285,103 @@ Before committing, inspect:
 git diff --cached --name-only
 ```
 
+Do not use `git add -A` in a mixed worktree. Stage only the approved medical
+JSON files explicitly.
+
 Stop if staged files include `_local/`, `.learnings/`, skill files, scripts,
 docs, CSV/TSV files, logs, credentials, package files, lockfiles, hooks, or
 unrelated source files.
 
 ## Publishing Strategy
 
-Default to pushing a `codex/<task-slug>` branch and opening a draft PR only when
-the user explicitly asks for publishing. If upstream push fails because the
-authenticated account lacks write permission, push to the user's fork and open a
-cross-repo PR. If a fork PR has passing GitHub Actions but Vercel reports
-`Authorization required to deploy`, explain that the deployment preview is
-blocked by authorization and is not necessarily a code build failure.
+Default to no push and no PR unless the user explicitly asks for publishing.
+When publishing is requested, use one short-lived `codex/<task-slug>` branch per
+task. Do not make medical data commits directly on `main`.
 
-Only merge directly to upstream `main` after the user explicitly confirms direct
-upstream permission and requests direct merge, and only after validation/checks
-pass. Delete a temporary branch only when it is fully merged and has no unpushed
-commits.
+Before creating a PR:
+
+```bash
+git fetch origin main
+git merge-base --is-ancestor origin/main HEAD
+git rev-list --count origin/main..HEAD
+git log --oneline origin/main..HEAD
+git diff --cached --name-only
+```
+
+The PR branch must be based on latest `origin/main`, and the staged files must
+pass the Commit Guard. If `origin/main` has advanced, do not update the PR branch
+with a merge commit. Rebase instead:
+
+```bash
+git fetch origin main
+git rebase origin/main
+git push --force-with-lease
+```
+
+Never run `git merge origin/main` to update a medical map PR branch, and do not
+use GitHub's "Update branch" path when it would create a merge commit. Preserve a
+linear PR history.
+
+PR bodies must be reviewer-facing. Include only committed data changes,
+map-user-visible impact, files changed, validation that applies to committed
+files, and this merge note:
+
+```text
+Please use squash merge when this PR is ready.
+```
+
+Do not include local workflow internals such as `_local/`, CSV sync steps,
+candidate row bookkeeping, transient local tool failures, proxy recovery, or
+uncommitted logs. It is acceptable to state briefly that the full app test suite
+was not verified locally, without including local toolchain logs.
+
+If upstream push fails because the authenticated account lacks write permission,
+push to the user's fork and open a cross-repo PR. If a fork PR has passing GitHub
+Actions but Vercel reports `Authorization required to deploy`, explain that the
+deployment preview is blocked by authorization and is not necessarily a code
+build failure.
+
+Before merging a PR:
+
+```bash
+git fetch origin main
+git merge-base --is-ancestor origin/main HEAD
+git rev-list --count origin/main..HEAD
+git log --oneline --graph origin/main..HEAD
+gh pr view <PR> --json mergeStateStatus,isDraft,state,statusCheckRollup
+gh pr checks <PR>
+```
+
+The graph output must show only the branch commits to be integrated, with no
+merge commits. The PR must not be draft, `mergeStateStatus` must be `CLEAN` or
+an equivalent mergeable state, and all required/relevant checks must pass. If CI,
+Vercel, CodeQL, authorization, or review state is pending or failed, stop and
+report the blocker.
+
+Medical map data PRs must be integrated with squash merge:
+
+```bash
+gh pr merge <PR> --squash --delete-branch
+```
+
+Do not use `gh pr merge --merge` for this workflow. Only merge directly to
+upstream `main` after the user explicitly confirms direct upstream permission and
+requests direct merge, and only after validation/checks pass.
+
+After merge:
+
+```bash
+gh pr view <PR> --json state,mergeCommit
+git fetch origin main --prune
+git switch main
+git pull --ff-only origin main
+git branch -d codex/<task-slug>
+```
+
+Confirm the PR is `MERGED`, `origin/main` contains the squash commit, the remote
+temporary branch was deleted, and the local task branch has no unpushed commits
+before deleting it. Update local `main` only by fast-forward/fetch, never by a
+merge commit.
 
 ## Self-Audit And Difficult Problems
 

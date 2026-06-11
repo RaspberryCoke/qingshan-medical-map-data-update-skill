@@ -157,6 +157,82 @@ src/_data/medicalAbroadData.json
 
 如包含 `_local/`、`.learnings/`、skill 文件、脚本、文档、CSV/TSV、日志、凭据、package 文件、lockfile、hook 或其他无关文件，必须停止。
 
+## Publishing PRs
+
+Default to no push and no PR. Only commit, push, create a PR, or merge when the
+user explicitly asks.
+
+Use one short-lived branch per task:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c codex/<task-slug>
+```
+
+Before creating a PR, fetch latest `origin/main`, verify this branch is based on
+it, and verify only approved medical JSON files are staged:
+
+```bash
+git fetch origin main
+git merge-base --is-ancestor origin/main HEAD
+git rev-list --count origin/main..HEAD
+git log --oneline origin/main..HEAD
+git diff --cached --name-only
+```
+
+If `origin/main` advances while the PR branch is open, do not merge main into the
+PR branch. Rebase and push with a lease:
+
+```bash
+git fetch origin main
+git rebase origin/main
+git push --force-with-lease
+```
+
+Never use `git merge origin/main`, `gh pr merge --merge`, or a GitHub "Update
+branch" action that creates a merge commit for medical map PRs. Keep the PR
+branch linear.
+
+The PR body must be reviewer-facing: summarize committed medical JSON changes,
+map-user-visible impact, committed-file validation, and include `Please use
+squash merge when this PR is ready.` Do not include `_local/`, CSV sync details,
+candidate row bookkeeping, transient local tool failures, proxy recovery, or
+uncommitted logs.
+
+Before merge:
+
+```bash
+git fetch origin main
+git merge-base --is-ancestor origin/main HEAD
+git rev-list --count origin/main..HEAD
+git log --oneline --graph origin/main..HEAD
+gh pr view <PR> --json mergeStateStatus,isDraft,state,statusCheckRollup
+gh pr checks <PR>
+```
+
+Merge only when the PR is not draft, the merge state is clean or equivalently
+mergeable, required/relevant checks pass, and the graph contains no merge
+commit. If checks are pending, failed, or authorization-blocked, stop and report
+the blocker.
+
+Final integration must use squash merge:
+
+```bash
+gh pr merge <PR> --squash --delete-branch
+```
+
+After merge, confirm the PR is merged, fetch/prune, fast-forward local `main`,
+and delete the local task branch only after it has no unpushed commits:
+
+```bash
+gh pr view <PR> --json state,mergeCommit
+git fetch origin main --prune
+git switch main
+git pull --ff-only origin main
+git branch -d codex/<task-slug>
+```
+
 ## GitHub 连接恢复
 
 GitHub 连接失败时，检查 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、小写变量以及 Git proxy config。当前设置了代理却失败时，先临时清空代理重试一次；直连失败后，再检查 `127.0.0.1:7890` 是否可达，并用 `HTTP_PROXY=http://127.0.0.1:7890`、`HTTPS_PROXY=http://127.0.0.1:7890` 重试一次。仍失败时，尝试等价 `gh` 路径；如果都失败，明确报告已尝试的路径。
