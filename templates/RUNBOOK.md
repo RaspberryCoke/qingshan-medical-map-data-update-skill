@@ -135,3 +135,73 @@ src/_data/medicalData.json
 src/_data/medicalChildData.json
 src/_data/medicalAbroadData.json
 ```
+
+## Publishing PRs
+
+Default to no push and no PR. Only commit, push, create a PR, or merge when the
+user explicitly asks.
+
+Use one short-lived branch per task:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c codex/<task-slug>
+```
+
+Before creating a PR:
+
+```bash
+git fetch origin main
+git merge-base --is-ancestor origin/main HEAD
+git rev-list --count origin/main..HEAD
+git log --oneline origin/main..HEAD
+git diff --cached --name-only
+```
+
+If `origin/main` advances, rebase instead of merging main into the PR branch:
+
+```bash
+git fetch origin main
+git rebase origin/main
+git push --force-with-lease
+```
+
+Never use `git merge origin/main`, `gh pr merge --merge`, or a GitHub "Update
+branch" action that creates a merge commit. Keep medical map PR history linear.
+
+Keep PR bodies reviewer-facing: committed JSON changes, map-user-visible impact,
+committed-file validation, and `Please use squash merge when this PR is ready.`
+Do not include `_local/`, CSV sync details, row-count bookkeeping, local tool
+failures, proxy recovery, or uncommitted logs.
+
+Before merge:
+
+```bash
+git fetch origin main
+git merge-base --is-ancestor origin/main HEAD
+git rev-list --count origin/main..HEAD
+git log --oneline --graph origin/main..HEAD
+gh pr view <PR> --json mergeStateStatus,isDraft,state,statusCheckRollup
+gh pr checks <PR>
+```
+
+Merge only when the PR is not draft, the merge state is clean or equivalently
+mergeable, required/relevant checks pass, and the graph contains no merge
+commit. Stop on pending or failed checks.
+
+Final integration must use squash merge:
+
+```bash
+gh pr merge <PR> --squash --delete-branch
+```
+
+After merge:
+
+```bash
+gh pr view <PR> --json state,mergeCommit
+git fetch origin main --prune
+git switch main
+git pull --ff-only origin main
+git branch -d codex/<task-slug>
+```
