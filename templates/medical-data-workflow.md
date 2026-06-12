@@ -157,10 +157,33 @@ src/_data/medicalAbroadData.json
 
 濡傚寘鍚?`_local/`銆乣.learnings/`銆乻kill 鏂囦欢銆佽剼鏈€佹枃妗ｃ€丆SV/TSV銆佹棩蹇椼€佸嚟鎹€乸ackage 鏂囦欢銆乴ockfile銆乭ook 鎴栧叾浠栨棤鍏虫枃浠讹紝蹇呴』鍋滄銆?
 
+## Staged Handoff
+
+For every stage, first say what will happen, then execute the stage
+automatically unless a safety risk appears. After the stage, report what was
+done, what the user must check, and the exact next instruction to send.
+
+Mandatory stops: before JSON writes, before commit, before push, before creating
+a fork Draft PR, before production PR handoff, and before any operation that
+could affect production repository history.
+
+Use these handoff prompts:
+
+```text
+继续执行阶段 1：同步公开 CSV，并只读分析本次反馈，不修改任何 JSON。
+我已审核分析结果，可以继续阶段 2：根据分析结果修改 JSON，但不要 commit。
+我已审核 JSON 修改结果，可以继续阶段 3：创建本地 commit，但不要 push。
+继续阶段 4：在 push 前同步上游主仓库，确保历史线性。
+确认可以 push 到 fork 仓库，继续阶段 5：push 当前分支。
+继续阶段 6：在 fork 仓库创建 draft PR。
+我已检查 fork 仓库 draft PR，没有问题。继续阶段 7：准备向主仓库提交 PR 前的最终同步检查。
+确认最终检查通过。继续阶段 8：向主仓库提交 PR。
+```
+
 ## Publishing PRs
 
-Default to no push and no PR. Only commit, push, or create a Draft PR when the
-user explicitly asks. Before any GitHub write, report `git remote -v`,
+Default to no push and no PR. Only commit, push, or create a fork Draft PR when
+the user follows the staged handoff. Before any GitHub write, report `git remote -v`,
 `git branch --show-current`, `gh repo view --json nameWithOwner,defaultBranchRef`,
 `origin`, `upstream`, the target operation, and whether it writes to a remote.
 Stop if the repository identity is unclear.
@@ -180,8 +203,8 @@ git switch -c codex/<task-slug> upstream/main
 Stop before `git reset --hard upstream/main` if the worktree is dirty or local
 `main` has commits that are not in `upstream/main`. Do not push `origin/main`.
 
-Before creating a Draft PR, fetch latest `upstream/main`, rebase, and verify
-only approved medical JSON files are staged:
+Before pushing or creating a fork Draft PR, fetch latest `upstream/main`,
+rebase, and verify only approved medical JSON files are staged:
 
 ```bash
 git fetch upstream
@@ -210,9 +233,11 @@ squash merge when this PR is ready.` Do not include `_local/`, CSV sync details,
 candidate row bookkeeping, transient local tool failures, proxy recovery, or
 uncommitted logs.
 
-Draft PRs must be from `origin/codex/<task-slug>` to `upstream/main`. Merging is
-a human-maintainer action. Do not run `gh pr merge`. For a Ready for review or
-merge readiness check:
+Fork Draft PRs must be from `origin/codex/<task-slug>` to the fork default
+branch. Do not create the production PR; guide the user to create it manually
+from the fork branch to the production repository after the final sync check.
+Merging is a human-maintainer action. Do not run `gh pr merge`. For production
+PR readiness:
 
 ```bash
 git fetch upstream

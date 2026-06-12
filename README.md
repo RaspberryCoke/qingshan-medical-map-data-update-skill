@@ -5,13 +5,15 @@ JSON data through a local, review-first workflow.
 
 It helps maintainers download feedback from a public Google Sheet CSV URL,
 prepare a local review workspace, analyze feedback against existing medical
-map JSON, and apply only manually approved data updates.
+map JSON, and apply only manually approved data updates through a staged
+handoff protocol.
 
 ## What This Is Not
 
 - Not a fully automated repository editing tool.
-- Not a permission boundary for production repositories; draft PRs still require
-  repository identity checks and human-controlled merge permissions.
+- Not a permission boundary for production repositories; fork Draft PRs still
+  require repository identity checks, and production PRs are created manually by
+  the user.
 - Not a cloud sync service.
 - Not a replacement for human review.
 - Not a Google API, Service Account, OAuth, `.env`, persistent proxy, or pnpm
@@ -79,6 +81,12 @@ Then ask Codex:
 请读取 _local/workflow/medical-data-workflow.md，按医疗地图本地工作流处理 _local/input/medical-feedback.csv。先只读分析并输出逐行方案，等我批准后再修改 JSON。
 ```
 
+## Recommended Codex Prompt
+
+```text
+使用 qingshan-medical-map-data-update-skill，从阶段 0 开始执行医疗地图更新向导。
+```
+
 ## What the Initializer Creates
 
 The initializer creates this ignored local workspace inside the target
@@ -130,7 +138,10 @@ initializer prints a reminder. It does not edit `.gitignore` automatically.
 - The maintainer must initialize `_local/` from the target repository root.
 - The maintainer may override the approved/default public CSV URL at preflight
   or sync time.
-- The maintainer must review Codex's row-by-row plan before any JSON changes.
+- The maintainer must review Codex's stage summaries and row-by-row plan before
+  any JSON changes.
+- The maintainer must explicitly confirm before JSON edits, local commit, fork
+  push, fork Draft PR creation, and production PR handoff.
 
 The human review gate remains mandatory because feedback can be ambiguous,
 medical information can become stale, and the target JSON is public map data

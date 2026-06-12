@@ -1,12 +1,82 @@
 ---
 name: qingshan-medical-map-data-update-skill
-description: Local review-first workflow for maintaining Qingshan medical map JSON data from a public Google Sheet CSV. Use when the user says to run the medical map local workflow, sync a public Sheet and analyze it, or process _local/input/medical-feedback.csv; requires a cloned target repo root and human approval before JSON edits.
+description: Guided local workflow for maintaining Qingshan medical map JSON data from a public Google Sheet CSV. Use when the user wants to run the medical map update wizard, sync and analyze a public Sheet/CSV, process _local/input/medical-feedback.csv, update medical JSON, commit, push to a fork, or prepare PR handoff; requires a cloned target repo root, staged auto-run summaries, fork-only writes, and human approval before JSON edits, commits, pushes, or PR steps.
 ---
 
 # Qingshan Medical Map Data Update
 
 Use this skill to process medical map feedback from a public CSV in a cloned
 target repository. Keep the workflow local, auditable, and review-first.
+
+## Staged Auto-Run And Handoff Protocol
+
+Act like a guarded update wizard for non-technical users. Every stage must:
+
+```md
+我接下来要做的事：
+- <本阶段要完成的检查或操作>
+- <本阶段要产出的结论>
+
+我会自动执行这些检查；除非发现风险，否则不会中途打断你。
+```
+
+Then execute the stage automatically. Do not ask for confirmation for each small
+command inside a stage. After the stage finishes, output:
+
+```md
+本阶段已完成：
+- <关键结论 1>
+- <关键结论 2>
+- 风险判断：可以继续 / 暂停处理
+
+你现在需要做的事：
+- <用户需要审核或手动完成的事项>
+- 如果没有问题，发送下面这条指令继续：
+
+下一条指令：
+<用户应复制发送的下一条指令>
+```
+
+Include technical logs only after a plain-language summary. Never end a stage
+with only "完成了", an error dump, or an unstated next step.
+
+Within a stage, continue automatically unless one of these risks appears:
+
+- About to modify the core JSON data.
+- About to create a commit.
+- About to push to any remote.
+- About to create any PR.
+- `upstream/main` has changed or the branch is behind it.
+- Conflicts, uncommitted changes, non-linear history, or ambiguous staged files
+  are present.
+- The current repository is not the expected target repository.
+- An operation may affect production `main`, `origin/main`, or `upstream/main`.
+
+Always stop for explicit user confirmation before:
+
+1. Writing analyzed CSV/Sheet results into JSON.
+2. Creating a commit after JSON edits.
+3. Pushing to the fork.
+4. Creating a fork Draft PR.
+5. Asking the user to create or mark a production PR ready.
+6. Running any operation that might affect production repository history.
+
+## Stage Map
+
+Use these stages and exact handoff prompts unless the user explicitly asks for a
+scoped subtask:
+
+| Stage | Purpose | Stop / next instruction |
+| --- | --- | --- |
+| 0 | Environment and repository safety check. | `继续执行阶段 1：同步公开 CSV，并只读分析本次反馈，不修改任何 JSON。` |
+| 1 | Sync public CSV and analyze feedback read-only. | `我已审核分析结果，可以继续阶段 2：根据分析结果修改 JSON，但不要 commit。` |
+| 2 | Modify approved JSON and validate, without commit. | `我已审核 JSON 修改结果，可以继续阶段 3：创建本地 commit，但不要 push。` |
+| 3 | Create local commit only. | `继续阶段 4：在 push 前同步上游主仓库，确保历史线性。` |
+| 4 | Fetch/rebase on latest `upstream/main` before push. | `确认可以 push 到 fork 仓库，继续阶段 5：push 当前分支。` |
+| 5 | Push current branch to the fork only. | `继续阶段 6：在 fork 仓库创建 draft PR。` |
+| 6 | Create a Draft PR inside the fork repository only. | `我已检查 fork 仓库 draft PR，没有问题。继续阶段 7：准备向主仓库提交 PR 前的最终同步检查。` |
+| 7 | Final sync/readiness check before user submits production PR. | `确认最终检查通过。继续阶段 8：向主仓库提交 PR。` |
+| 8 | Guide the user to manually submit the production PR. | Ask the user to paste the production PR link after creation; do not create it for them. |
 
 ## Preconditions
 
@@ -61,9 +131,11 @@ The approved default public CSV URL for this workflow is:
 https://docs.google.com/spreadsheets/d/e/2PACX-1vRxiGx8JadZ-HPRJBb8-PMscizOv-4UpMqa56XZOhvr8ddkS99vm7hFJ-yee7c3btGrR4eXPRW_SAdi/pub?gid=1596563937&single=true&output=csv
 ```
 
-## Start Every Run
+## Stage 0: Environment And Repository Safety Check
 
-Before processing data, run strict preflight. The preflight must:
+Start with the staged protocol. Say that you will verify the repository,
+remotes, branch, worktree, tools, and upstream sync state, then run strict
+preflight. The preflight must:
 
 - Check whether this skill repository can fast-forward to its upstream. If it
   updates the skill, stop and ask the user to restart Codex or start a new run
@@ -145,9 +217,22 @@ src/_data/medicalChildData.json
 src/_data/medicalAbroadData.json
 ```
 
-## Phase 1: Read-Only Analysis
+End Stage 0 with a human-readable report:
 
-Do not edit files in this phase.
+- Current repository and whether it is the expected target repository.
+- Current branch and whether it is a safe `codex/<task-slug>` branch.
+- `origin` and `upstream` roles.
+- Worktree status: clean or has uncommitted changes.
+- Upstream sync status: synchronized or needs sync.
+- Risk judgment: continue or pause with recovery steps.
+- Next instruction:
+  `继续执行阶段 1：同步公开 CSV，并只读分析本次反馈，不修改任何 JSON。`
+
+## Stage 1: Sync Data And Read-Only Analysis
+
+Start with the staged protocol. Sync `_local/input/medical-feedback.csv` from
+the approved public CSV when needed, then analyze CSV feedback and existing JSON
+read-only. Do not edit files in this stage.
 
 Output:
 
@@ -162,8 +247,12 @@ Output:
 - Duplicate checks against existing JSON.
 - Suspected duplicate hospitals or doctors.
 - Rows that need human judgment.
+- Effective feedback count.
+- Affected hospitals, doctors, and regions.
+- Rows not recommended for JSON writes and why.
+- Whether the result is ready for Stage 2 JSON edits.
 
-## Phase 2: Row-by-Row Plan
+### Stage 1 Row-By-Row Plan
 
 Give a plan for every default candidate row. By default, candidate rows are
 `未更新`; report `无效信息` rows as skipped, and report `已更新` rows as skipped
@@ -188,9 +277,15 @@ Wait for explicit user approval after the plan. Accept approvals such as
 
 Without explicit approval, do not modify JSON.
 
-## Approved Edits
+End Stage 1 with the next instruction:
 
-After approval, modify only:
+```text
+我已审核分析结果，可以继续阶段 2：根据分析结果修改 JSON，但不要 commit。
+```
+
+## Stage 2: Modify JSON After Approval
+
+Start only after explicit user approval of the analysis/row plan. Modify only:
 
 ```text
 src/_data/medicalData.json
@@ -209,8 +304,19 @@ git diff --check
 git status --short --branch
 ```
 
-Default to no push and no PR. Commit, push, or create a PR only when the user
-explicitly asks.
+End Stage 2 with:
+
+- Files modified.
+- Entries added, changed, skipped, or removed.
+- JSON parse validation result.
+- `git diff --check` result.
+- `git diff --stat` and a concise diff summary.
+- Confirmation that no commit, push, or PR was created.
+- Next instruction:
+  `我已审核 JSON 修改结果，可以继续阶段 3：创建本地 commit，但不要 push。`
+
+Default to no commit, no push, and no PR. Commit, push, or create a PR only when
+the user explicitly follows the staged handoff.
 
 ## Data Rules
 
@@ -306,8 +412,8 @@ Core principles:
 
 ```text
 AI/Codex can modify the fork, not upstream.
-AI/Codex can create fork branches and Draft PRs, not merge.
-The only entry into upstream/main is a protected PR.
+AI/Codex can create fork branches and fork-internal Draft PRs, not merge.
+The only entry into upstream/main is a human-created protected PR.
 Sync from upstream with rebase; final integration uses Squash merge.
 Permission constraints are stronger than prompt constraints.
 ```
@@ -321,9 +427,9 @@ main: default branch, never directly modified by AI/Codex.
 codex/<task-slug>: one feature branch per task.
 ```
 
-Treat draft PRs as workflow review, not as a permission boundary. Default to
-local-only work: modify files only after approval, validate, then output summary,
-file list, test results, diff, and a suggested commit message.
+Treat fork Draft PRs as workflow review, not as a permission boundary. Default
+to local-only work: modify files only after approval, validate, then output
+summary, file list, test results, diff, and a suggested commit message.
 
 Before creating an issue, branch, commit, PR, or any other GitHub write, run and
 report:
@@ -388,9 +494,11 @@ Block deletions
 Restrict who can push to main
 ```
 
-## Commit Guard
+## Stage 3: Create Local Commit
 
-Medical data commits may include only:
+Start only after the user approves the Stage 2 JSON diff. Before committing,
+repeat the repository identity gate and inspect the worktree. Medical data
+commits may include only:
 
 ```text
 src/_data/medicalData.json
@@ -411,13 +519,24 @@ Stop if staged files include `_local/`, `.learnings/`, skill files, scripts,
 docs, CSV/TSV files, logs, credentials, package files, lockfiles, hooks, or
 unrelated source files.
 
-## Publishing Strategy
+Create one clear local commit and do not push. End Stage 3 with:
 
-Default to no push and no PR unless the user explicitly asks for publishing.
-When publishing is requested, push only to `origin/codex/<task-slug>` and open a
-Draft PR from the fork branch to `upstream/main`. Use one short-lived
-`codex/<task-slug>` branch per task. Do not make medical data commits directly on
-`main`.
+- Commit hash.
+- Commit message.
+- Current branch.
+- Whether the branch is still linear and based on the expected upstream commit.
+- Confirmation that nothing was pushed.
+- Next instruction:
+  `继续阶段 4：在 push 前同步上游主仓库，确保历史线性。`
+
+## Stages 4-8: Fork Publishing And Production PR Handoff
+
+Default to no push and no PR unless the user explicitly follows the staged
+handoff. When publishing is requested, push only to
+`origin/codex/<task-slug>` and create Draft PRs only inside the fork repository.
+Use one short-lived `codex/<task-slug>` branch per task. Do not make medical
+data commits directly on `main`, do not push `origin/main`, and do not create a
+PR against the production repository for the user.
 
 Allowed during the modification phase:
 
@@ -430,7 +549,11 @@ git push origin codex/<task-slug>
 Do not use `git add .` in this medical-data workflow unless the worktree
 contains only approved files. Prefer explicit staging.
 
-Before creating a Draft PR, sync from upstream with rebase:
+### Stage 4: Sync Upstream Before Push
+
+Start only after the local commit exists. Fetch latest `upstream/main`, confirm
+whether production changed since Stage 3, and rebase the task branch when
+needed:
 
 ```bash
 git fetch upstream
@@ -439,24 +562,62 @@ git rebase upstream/main
 git status
 ```
 
-If rebase produces conflicts, stop and report the conflicted files. Do not make
-uncertain conflict resolutions. After a successful rebase, push only the fork
-task branch:
+If rebase produces conflicts, stop and report the conflicted files with recovery
+options. Do not make uncertain conflict resolutions. End Stage 4 with:
+
+- Latest `upstream/main` commit.
+- Whether the current branch is based on latest `upstream/main`.
+- Whether a rebase happened.
+- Whether conflicts occurred.
+- Whether it is safe to push.
+- Next instruction:
+  `确认可以 push 到 fork 仓库，继续阶段 5：push 当前分支。`
+
+### Stage 5: Push Current Branch To Fork
+
+Start only after the user confirms Stage 4. Push only the fork task branch:
 
 ```bash
 git push --force-with-lease origin codex/<task-slug>
 ```
 
-Create the Draft PR as:
+Use `--force-with-lease` only after a successful rebase and only for
+`origin/codex/<task-slug>`. A normal `git push origin codex/<task-slug>` is
+preferred when no rebase rewrote the local commit. End Stage 5 with:
+
+- Push target remote.
+- Push target branch.
+- Fork branch URL when available.
+- Success or failure with recovery steps.
+- Next instruction:
+  `继续阶段 6：在 fork 仓库创建 draft PR。`
+
+### Stage 6: Create Fork-Internal Draft PR
+
+Start only after the user confirms Stage 5. Create a Draft PR inside the fork
+repository, not against the production repository:
 
 ```text
 from: origin/codex/<task-slug>
-to: upstream/main
+to: origin/main or the fork default branch
 initial state: Draft PR
 ```
 
-After a Draft PR exists, if `upstream/main` changes before Ready for review,
-continue syncing with:
+The fork Draft PR is for pre-checks, diff review, and discussion space. End
+Stage 6 with:
+
+- Fork Draft PR link.
+- PR base and head.
+- PR state.
+- What the user should inspect.
+- Next instruction:
+  `我已检查 fork 仓库 draft PR，没有问题。继续阶段 7：准备向主仓库提交 PR 前的最终同步检查。`
+
+### Stage 7: Final Check Before Production PR Handoff
+
+Start only after the user confirms the fork Draft PR looks correct. Fetch
+`upstream/main` again. If `upstream/main` changed, rebase, revalidate, and push
+the updated fork branch before allowing Stage 8:
 
 ```bash
 git fetch upstream
@@ -468,9 +629,41 @@ git push --force-with-lease origin codex/<task-slug>
 The PR branch should stay based on the latest `upstream/main` as much as
 possible and must not contain merge commits.
 
-PR bodies must be reviewer-facing. Include only committed data changes,
-map-user-visible impact, files changed, validation that applies to committed
-files, and this merge note:
+End Stage 7 with:
+
+- Latest `upstream/main` commit.
+- Current branch latest commit.
+- Whether the branch is fully based on latest `upstream/main`.
+- Whether history is linear.
+- Whether it is safe for the user to create the production PR.
+- Next instruction:
+  `确认最终检查通过。继续阶段 8：向主仓库提交 PR。`
+
+### Stage 8: Guide Manual Production PR Creation
+
+Do not create the production PR. Guide the user to manually create a PR from the
+fork branch to the production repository. Tell the user to include:
+
+- Data source: public CSV / Google Sheet.
+- Modification summary.
+- Changed medical JSON files.
+- Validation results.
+- Merge note: `Please use squash merge when this PR is ready.`
+
+Tell the user not to merge directly. Recommend Squash merge after maintainer
+review and passing checks. End Stage 8 with:
+
+- Production PR link if the user already provided it; otherwise say that it is
+  waiting for the user to create and paste the link.
+- Base and head expected for the production PR.
+- Modification summary.
+- Validation/check results.
+- How maintainers should review the change.
+- Merge recommendation: Squash merge.
+
+Production PR bodies must be reviewer-facing. Include only committed data
+changes, map-user-visible impact, files changed, validation that applies to
+committed files, and this merge note:
 
 ```text
 Please use squash merge when this PR is ready.
@@ -481,8 +674,8 @@ candidate row bookkeeping, transient local tool failures, proxy recovery, or
 uncommitted logs. It is acceptable to state briefly that the full app test suite
 was not verified locally, without including local toolchain logs.
 
-Before marking a Draft PR Ready for review, or before asking a maintainer to
-merge, inspect:
+Before telling the user that a production PR is ready to submit or asking a
+maintainer to review/merge, inspect:
 
 ```bash
 git fetch upstream
@@ -490,19 +683,20 @@ git switch codex/<task-slug>
 git rebase upstream/main
 git status
 git log --oneline --graph --decorate --all -20
-gh pr view <PR> --json mergeStateStatus,isDraft,state,statusCheckRollup
-gh pr checks <PR>
+gh pr view <fork-pr-or-production-pr-if-user-provided> --json mergeStateStatus,isDraft,state,statusCheckRollup
+gh pr checks <fork-pr-or-production-pr-if-user-provided>
 ```
 
 Confirm:
 
 ```text
 1. Current branch is codex/<task-slug>.
-2. PR branch is based on latest upstream/main.
+2. The fork branch is based on latest upstream/main.
 3. There are no merge commits.
 4. There are no uncommitted changes.
 5. The diff contains only task-related changes.
-6. CI has passed, or failures/authorization blockers are explained.
+6. CI has passed where available, or failures/authorization blockers are
+   explained.
 ```
 
 Medical map data PRs must be integrated with squash merge:

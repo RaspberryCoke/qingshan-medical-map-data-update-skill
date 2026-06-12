@@ -42,7 +42,8 @@ gh repo view --json nameWithOwner,defaultBranchRef
 Report the current repository, current branch, `origin`, `upstream`, default
 branch, target operation, and whether the operation writes to a remote. Stop if
 any of those are unclear or do not match the intended repository. Draft PRs are a
-review workflow, not a permission boundary.
+review workflow, not a permission boundary; create them only inside the fork
+unless a human explicitly creates the production PR.
 
 Repository roles:
 
@@ -121,12 +122,13 @@ Use one task branch per medical data update, and do not make data commits
 directly on `main`.
 
 Default to no push and no PR when using the workflow in the target repository.
-Only commit, push, or create a PR when the user explicitly requests it. When
+Only commit, push, or create a PR when the user follows the staged handoff. When
 publishing is requested, push only to `origin/codex/<task-slug>` and open a Draft
-PR from that fork branch to `upstream/main`.
+PR inside the fork repository. Do not create a PR against the production
+repository for the user.
 
-Before creating a Draft PR, refresh remote state and rebase on latest
-`upstream/main`:
+Before pushing or creating a fork Draft PR, refresh remote state and rebase on
+latest `upstream/main`:
 
 ```bash
 git fetch upstream
@@ -155,14 +157,15 @@ sync details, candidate row bookkeeping, transient tool failures, proxy recovery
 or uncommitted logs. If the full app test suite was not run locally, mention that
 briefly without local toolchain logs.
 
-Draft PRs must be from `origin/codex/<task-slug>` to `upstream/main`. If GitHub
-Actions checks pass but Vercel reports `Authorization required to deploy` on a
-fork PR, explain that the preview deployment is blocked by authorization and is
-not necessarily a code build failure.
+Fork Draft PRs must be from `origin/codex/<task-slug>` to the fork default
+branch. If GitHub Actions checks pass but Vercel reports `Authorization required
+to deploy` on a fork PR, explain that the preview deployment is blocked by
+authorization and is not necessarily a code build failure.
 
-Merging is a human-maintainer action. Do not run `gh pr merge`. Before marking a
-Draft PR Ready for review, or before asking a maintainer to merge, refresh remote
-state and check linear history plus GitHub status:
+Creating the production PR and merging are human-maintainer actions. Do not run
+`gh pr merge` and do not create the production PR. Before telling the user a
+production PR is ready to submit, or before asking a maintainer to review/merge,
+refresh remote state and check linear history plus GitHub status:
 
 ```bash
 git fetch upstream
