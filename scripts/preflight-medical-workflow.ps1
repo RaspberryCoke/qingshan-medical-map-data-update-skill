@@ -1,6 +1,6 @@
 param(
   [string]$TaskSlug = "update-medical-map-data-$(Get-Date -Format yyyyMMdd)",
-  [string]$ExpectedOrigin = 'ittuann/qingshanasd',
+  [string]$ExpectedUpstream = 'ittuann/qingshanasd',
   [string]$SkillRoot = '',
   [string]$PublishedCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRxiGx8JadZ-HPRJBb8-PMscizOv-4UpMqa56XZOhvr8ddkS99vm7hFJ-yee7c3btGrR4eXPRW_SAdi/pub?gid=1596563937&single=true&output=csv',
   [switch]$SkipSkillUpdate,
@@ -119,6 +119,47 @@ function Invoke-GitHubCommand {
   }
 }
 
+function Invoke-GitHubOutput {
+  param(
+    [Parameter(Mandatory = $true)][string]$Command,
+    [Parameter(Mandatory = $true)][string[]]$Arguments,
+    [Parameter(Mandatory = $true)][string]$Description
+  )
+
+  Write-Host "Running: $Description"
+  $snapshot = Get-ProxySnapshot
+  $hadProxy = $proxyVariables | Where-Object { -not [string]::IsNullOrWhiteSpace($snapshot[$_]) } | Select-Object -First 1
+
+  try {
+    $output = & $Command @Arguments
+    if ($LASTEXITCODE -eq 0) {
+      return $output
+    }
+
+    if ($hadProxy) {
+      Write-Warning "$Description failed while proxy variables were set. Retrying once without proxy."
+      Clear-ProxyEnvironment
+      $output = & $Command @Arguments
+      if ($LASTEXITCODE -eq 0) {
+        return $output
+      }
+    }
+
+    if (Test-LocalProxy) {
+      Write-Warning "$Description failed. Retrying once with HTTP(S)_PROXY=http://127.0.0.1:7890."
+      Set-LocalProxyEnvironment
+      $output = & $Command @Arguments
+      if ($LASTEXITCODE -eq 0) {
+        return $output
+      }
+    }
+
+    throw "$Description failed after direct/proxy recovery attempts."
+  } finally {
+    Restore-ProxySnapshot -Snapshot $snapshot
+  }
+}
+
 function Resolve-SkillRoot {
   if (-not [string]::IsNullOrWhiteSpace($SkillRoot)) {
     return $SkillRoot
@@ -211,13 +252,58 @@ function Assert-CleanWorktree {
   }
 }
 
-function Assert-Origin {
+function Assert-RepositoryRemotes {
   $origin = git remote get-url origin
   if ($LASTEXITCODE -ne 0) {
     throw 'Could not read origin remote.'
   }
-  if ($origin -notmatch [regex]::Escape($ExpectedOrigin)) {
-    throw "Unexpected origin remote. Expected it to contain '$ExpectedOrigin', got '$origin'."
+  $upstream = git remote get-url upstream
+  if ($LASTEXITCODE -ne 0) {
+    throw 'Could not read upstream remote. Configure upstream to point to the production repository.'
+  }
+  if ($upstream -notmatch [regex]::Escape($ExpectedUpstream)) {
+    throw "Unexpected upstream remote. Expected it to contain '$ExpectedUpstream', got '$upstream'."
+  }
+  if ($origin -eq $upstream -or $origin -match [regex]::Escape($ExpectedUpstream)) {
+    throw "origin must be a fork, not the production repository. origin='$origin', upstream='$upstream'."
+  }
+}
+
+function Assert-GitHubRepositoryIdentity {
+  $currentBranch = git branch --show-current
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($currentBranch)) {
+    throw 'Could not inspect current branch.'
+  }
+
+  $repoJson = Invoke-GitHubOutput -Command gh -Arguments @('repo', 'view', '--json', 'nameWithOwner,defaultBranchRef') -Description 'confirm GitHub repository identity'
+  $repo = ($repoJson | Out-String | ConvertFrom-Json)
+  $repoName = $repo.nameWithOwner
+  $originDefaultBranch = $repo.defaultBranchRef.name
+  $origin = git remote get-url origin
+  $upstream = git remote get-url upstream
+  $upstreamJson = Invoke-GitHubOutput -Command gh -Arguments @('repo', 'view', $ExpectedUpstream, '--json', 'nameWithOwner,defaultBranchRef') -Description 'confirm upstream repository identity'
+  $upstreamRepo = ($upstreamJson | Out-String | ConvertFrom-Json)
+  $upstreamDefaultBranch = $upstreamRepo.defaultBranchRef.name
+
+  Write-Host ''
+  Write-Host 'Repository safety gate:'
+  Write-Host "Current repository: $repoName"
+  Write-Host "Current branch: $currentBranch"
+  Write-Host "origin points to: $origin"
+  Write-Host "upstream points to: $upstream"
+  Write-Host "Origin default branch: $originDefaultBranch"
+  Write-Host "Upstream default branch: $upstreamDefaultBranch"
+  Write-Host 'Target operation: preflight sync from upstream/main and create or update local codex task branch'
+  Write-Host 'Remote write: no'
+
+  if ($repoName -ieq $ExpectedUpstream) {
+    throw "Current GitHub repository is the production repository '$repoName'. origin must point to a fork."
+  }
+  if ($upstreamRepo.nameWithOwner -ine $ExpectedUpstream) {
+    throw "Upstream repository mismatch. Expected '$ExpectedUpstream', got '$($upstreamRepo.nameWithOwner)'."
+  }
+  if ($upstreamDefaultBranch -ne 'main') {
+    throw "Unexpected upstream default branch. Expected 'main', got '$upstreamDefaultBranch'."
   }
 }
 
@@ -278,29 +364,44 @@ Assert-Command -Name gh
 Assert-Command -Name node
 
 Assert-TargetRepoRoot
-Assert-Origin
+Assert-RepositoryRemotes
 Assert-CleanWorktree
 
 git --version
 gh --version
 node --version
 Invoke-GitHubCommand -Command gh -Arguments @('auth', 'status') -Description 'check GitHub CLI authentication'
+Assert-GitHubRepositoryIdentity
 
 Initialize-LocalWorkspace
 Sync-CsvIfNeeded
 
+Invoke-GitHubCommand -Command git -Arguments @('fetch', 'upstream', 'main') -Description 'fetch production upstream main'
 Invoke-External -Command git -Arguments @('switch', 'main') | Out-Null
 if ($LASTEXITCODE -ne 0) {
   throw 'Could not switch to main.'
 }
-Invoke-GitHubCommand -Command git -Arguments @('pull', '--ff-only', 'origin', 'main') -Description 'fast-forward target repository main'
+$localMainExtraCommits = git rev-list --count 'upstream/main..HEAD'
+if ($LASTEXITCODE -ne 0) {
+  throw 'Could not compare local main to upstream/main.'
+}
+if ([int]$localMainExtraCommits -gt 0) {
+  throw 'Local main has commits that are not in upstream/main. Stop before resetting local main.'
+}
+Invoke-External -Command git -Arguments @('reset', '--hard', 'upstream/main') | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw 'Could not reset local main to upstream/main.'
+}
 
 $branchName = "codex/$(Normalize-TaskSlug -Value $TaskSlug)"
 $existingBranch = git branch --list $branchName
 if ($existingBranch) {
   git switch $branchName
+  if ($LASTEXITCODE -eq 0) {
+    Invoke-External -Command git -Arguments @('rebase', 'upstream/main') | Out-Null
+  }
 } else {
-  git switch -c $branchName
+  git switch -c $branchName upstream/main
 }
 if ($LASTEXITCODE -ne 0) {
   throw "Could not switch to task branch: $branchName"

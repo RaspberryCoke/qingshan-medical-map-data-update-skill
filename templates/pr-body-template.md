@@ -17,7 +17,8 @@ Closes #<issue-number>
 
 - JSON parse passed.
 - `git diff --check` passed.
-- PR branch is based on latest `origin/main`.
+- Draft PR is from `origin/codex/<task-slug>` to `upstream/main`.
+- PR branch is rebased on latest `upstream/main`.
 - Linear branch history checked.
 - Full app test suite: <passed / not run locally; rely on PR checks>.
 
@@ -28,4 +29,4 @@ can become stale, so cautious notes wording and manual review remain required.
 
 ## Merge
 
-Please use squash merge when this PR is ready.
+Please use Squash merge when this PR is ready.

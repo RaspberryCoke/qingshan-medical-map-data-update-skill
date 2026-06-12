@@ -15,6 +15,7 @@ Require the user to clone the target repository first and run from its root:
 ```bash
 git clone <target-repo-url>
 cd <target-repo>
+git remote add upstream <production-repo-url>
 ```
 
 The current directory must contain:
@@ -28,6 +29,22 @@ src/_data/medicalAbroadData.json
 
 Stop if the current directory is Desktop, Downloads, a parent directory, or any
 directory that lacks the required repository markers.
+
+Git remotes must use the fork-based workflow:
+
+```text
+upstream = production repository, read-only for AI/Codex
+origin = the user's fork, writable only for codex/<task-slug> branches
+```
+
+The default AI/Codex write scope is only:
+
+```text
+local codex/<task-slug>
+origin/codex/<task-slug>
+```
+
+Never write to `upstream/main` or `origin/main`.
 
 Use only this data entrypoint:
 
@@ -58,15 +75,23 @@ Before processing data, run strict preflight. The preflight must:
 - Stop if the skill repository has local changes.
 - Confirm the current directory is the target repository root with `.git/` and
   the three required JSON files.
-- Confirm `origin` points to `ittuann/qingshanasd`, or stop and report the
-  mismatch.
+- Confirm `upstream` points to `ittuann/qingshanasd`, `origin` points to a fork,
+  and `origin` is not the production repository. Stop if either remote is
+  missing or ambiguous.
+- Before any GitHub write operation, confirm and report repository identity:
+  current repository, current branch, `origin`, `upstream`, default branch,
+  target operation, and whether the operation writes to a remote. If the
+  repository identity is unclear or not the expected repository for the task,
+  stop.
 - Check `git`, `gh`, `gh auth status`, and `node`.
 - Initialize `_local/input`, `_local/scripts`, `_local/logs`, and
   `_local/workflow` when missing.
 - Sync `_local/input/medical-feedback.csv` from the approved/default public CSV
   URL when the CSV is missing.
-- Switch to `main`, run `git pull --ff-only origin main`, and create or switch
-  to one short-lived normalized `codex/<task-slug>` branch for this task.
+- Fetch `upstream/main`, reset local `main` to `upstream/main` only after the
+  worktree is clean and local `main` has no extra commits, then create or switch
+  to one short-lived normalized `codex/<task-slug>` branch based on
+  `upstream/main`. Do not push `origin/main`.
 
 Use the platform preflight when it is available:
 
@@ -85,15 +110,21 @@ state and report anything risky:
 git status --short --branch
 git branch --show-current
 git remote -v
+gh repo view --json nameWithOwner,defaultBranchRef
 ```
 
 Then run:
 
 ```bash
 git switch main
-git pull --ff-only origin main
-git switch -c codex/<task-slug>
+git fetch upstream main
+git reset --hard upstream/main
+git switch -c codex/<task-slug> upstream/main
 ```
+
+Before `git reset --hard upstream/main`, stop if local `main` has uncommitted
+changes or commits that are not in `upstream/main`. The reset is local-only and
+must not be followed by `git push origin main`.
 
 If CSV sync is needed, choose the platform script:
 
@@ -269,6 +300,94 @@ It must not touch the target `qingshanasd` repository data. After reinstalling,
 stop immediately because the current Codex run may still have loaded older skill
 instructions.
 
+## Fork-Based Linear PR Workflow
+
+Core principles:
+
+```text
+AI/Codex can modify the fork, not upstream.
+AI/Codex can create fork branches and Draft PRs, not merge.
+The only entry into upstream/main is a protected PR.
+Sync from upstream with rebase; final integration uses Squash merge.
+Permission constraints are stronger than prompt constraints.
+```
+
+Repository roles:
+
+```text
+upstream: main/production repository, read-only for AI/Codex.
+origin: fork repository, writable only for task branches.
+main: default branch, never directly modified by AI/Codex.
+codex/<task-slug>: one feature branch per task.
+```
+
+Treat draft PRs as workflow review, not as a permission boundary. Default to
+local-only work: modify files only after approval, validate, then output summary,
+file list, test results, diff, and a suggested commit message.
+
+Before creating an issue, branch, commit, PR, or any other GitHub write, run and
+report:
+
+```bash
+git remote -v
+git branch --show-current
+gh repo view --json nameWithOwner,defaultBranchRef
+```
+
+The report must include:
+
+```text
+Current repository: <owner/name>
+Current branch: <branch>
+origin points to: <fork remote>
+upstream points to: <production remote>
+Default branch: <branch>
+Target operation: <issue / branch / commit / push / PR / readiness check / none>
+Remote write: <yes / no, and if yes exactly which remote/branch>
+```
+
+Stop if the current repository, branch, default branch, `origin`, `upstream`, or
+target operation is unclear. Do not create issues, branches, commits, PRs, or
+remote writes from an unverified repository.
+
+Allowed AI/Codex write scope:
+
+```text
+local codex/<task-slug>
+origin/codex/<task-slug>
+```
+
+Prohibited:
+
+- Do not push directly to `main`, `master`, or the default branch.
+- Do not push to `upstream`.
+- Do not push to `origin/main`.
+- Do not run `git push --force` or `git push --force-with-lease` against
+  `upstream` or any `main` branch.
+- Do not run `git merge upstream/main` or `git merge origin/main`; sync with
+  rebase to preserve linear history.
+- Do not merge PRs, close unrelated PRs or issues, delete branches, overwrite
+  branches not created for this task, or edit repository settings, secrets,
+  Actions permissions, or rulesets.
+- Do not use AI-held write permission as the safety boundary for the production
+  repository.
+
+`git push --force-with-lease` is allowed only for updating
+`origin/codex/<task-slug>` after a successful rebase. It is never allowed for
+`upstream`, `origin/main`, or any default branch.
+
+Recommended upstream protections:
+
+```text
+Require a pull request before merging
+Require status checks to pass
+Require branches to be up to date before merging
+Require linear history
+Block force pushes
+Block deletions
+Restrict who can push to main
+```
+
 ## Commit Guard
 
 Medical data commits may include only:
@@ -295,32 +414,59 @@ unrelated source files.
 ## Publishing Strategy
 
 Default to no push and no PR unless the user explicitly asks for publishing.
-When publishing is requested, use one short-lived `codex/<task-slug>` branch per
-task. Do not make medical data commits directly on `main`.
+When publishing is requested, push only to `origin/codex/<task-slug>` and open a
+Draft PR from the fork branch to `upstream/main`. Use one short-lived
+`codex/<task-slug>` branch per task. Do not make medical data commits directly on
+`main`.
 
-Before creating a PR:
-
-```bash
-git fetch origin main
-git merge-base --is-ancestor origin/main HEAD
-git rev-list --count origin/main..HEAD
-git log --oneline origin/main..HEAD
-git diff --cached --name-only
-```
-
-The PR branch must be based on latest `origin/main`, and the staged files must
-pass the Commit Guard. If `origin/main` has advanced, do not update the PR branch
-with a merge commit. Rebase instead:
+Allowed during the modification phase:
 
 ```bash
-git fetch origin main
-git rebase origin/main
-git push --force-with-lease
+git add src/_data/medicalData.json src/_data/medicalChildData.json src/_data/medicalAbroadData.json
+git commit -m "<message>"
+git push origin codex/<task-slug>
 ```
 
-Never run `git merge origin/main` to update a medical map PR branch, and do not
-use GitHub's "Update branch" path when it would create a merge commit. Preserve a
-linear PR history.
+Do not use `git add .` in this medical-data workflow unless the worktree
+contains only approved files. Prefer explicit staging.
+
+Before creating a Draft PR, sync from upstream with rebase:
+
+```bash
+git fetch upstream
+git switch codex/<task-slug>
+git rebase upstream/main
+git status
+```
+
+If rebase produces conflicts, stop and report the conflicted files. Do not make
+uncertain conflict resolutions. After a successful rebase, push only the fork
+task branch:
+
+```bash
+git push --force-with-lease origin codex/<task-slug>
+```
+
+Create the Draft PR as:
+
+```text
+from: origin/codex/<task-slug>
+to: upstream/main
+initial state: Draft PR
+```
+
+After a Draft PR exists, if `upstream/main` changes before Ready for review,
+continue syncing with:
+
+```bash
+git fetch upstream
+git switch codex/<task-slug>
+git rebase upstream/main
+git push --force-with-lease origin codex/<task-slug>
+```
+
+The PR branch should stay based on the latest `upstream/main` as much as
+possible and must not contain merge commits.
 
 PR bodies must be reviewer-facing. Include only committed data changes,
 map-user-visible impact, files changed, validation that applies to committed
@@ -335,28 +481,29 @@ candidate row bookkeeping, transient local tool failures, proxy recovery, or
 uncommitted logs. It is acceptable to state briefly that the full app test suite
 was not verified locally, without including local toolchain logs.
 
-If upstream push fails because the authenticated account lacks write permission,
-push to the user's fork and open a cross-repo PR. If a fork PR has passing GitHub
-Actions but Vercel reports `Authorization required to deploy`, explain that the
-deployment preview is blocked by authorization and is not necessarily a code
-build failure.
-
-Before merging a PR:
+Before marking a Draft PR Ready for review, or before asking a maintainer to
+merge, inspect:
 
 ```bash
-git fetch origin main
-git merge-base --is-ancestor origin/main HEAD
-git rev-list --count origin/main..HEAD
-git log --oneline --graph origin/main..HEAD
+git fetch upstream
+git switch codex/<task-slug>
+git rebase upstream/main
+git status
+git log --oneline --graph --decorate --all -20
 gh pr view <PR> --json mergeStateStatus,isDraft,state,statusCheckRollup
 gh pr checks <PR>
 ```
 
-The graph output must show only the branch commits to be integrated, with no
-merge commits. The PR must not be draft, `mergeStateStatus` must be `CLEAN` or
-an equivalent mergeable state, and all required/relevant checks must pass. If CI,
-Vercel, CodeQL, authorization, or review state is pending or failed, stop and
-report the blocker.
+Confirm:
+
+```text
+1. Current branch is codex/<task-slug>.
+2. PR branch is based on latest upstream/main.
+3. There are no merge commits.
+4. There are no uncommitted changes.
+5. The diff contains only task-related changes.
+6. CI has passed, or failures/authorization blockers are explained.
+```
 
 Medical map data PRs must be integrated with squash merge:
 
@@ -364,24 +511,23 @@ Medical map data PRs must be integrated with squash merge:
 gh pr merge <PR> --squash --delete-branch
 ```
 
-Do not use `gh pr merge --merge` for this workflow. Only merge directly to
-upstream `main` after the user explicitly confirms direct upstream permission and
-requests direct merge, and only after validation/checks pass.
+The command above is for the human maintainer to run after review and passing CI.
+AI/Codex must not run it. Do not use `gh pr merge --merge`, do not close PRs, do
+not delete remote branches, and do not merge directly to `upstream/main`.
 
-After merge:
+After a human Squash merge:
 
 ```bash
 gh pr view <PR> --json state,mergeCommit
-git fetch origin main --prune
+git fetch upstream main --prune
 git switch main
-git pull --ff-only origin main
+git reset --hard upstream/main
 git branch -d codex/<task-slug>
 ```
 
-Confirm the PR is `MERGED`, `origin/main` contains the squash commit, the remote
-temporary branch was deleted, and the local task branch has no unpushed commits
-before deleting it. Update local `main` only by fast-forward/fetch, never by a
-merge commit.
+Confirm the PR is `MERGED`, `upstream/main` contains the squash commit, and the
+local task branch has no unpushed commits before deleting it. Do not delete the
+remote fork branch unless a human maintainer explicitly asks.
 
 ## Self-Audit And Difficult Problems
 
@@ -404,6 +550,8 @@ state, and existing issues in this skill repository before creating a new issue.
 Exclude secrets, tokens, raw CSV, and private feedback by default.
 
 For a difficult blocker that cannot be solved, create an issue in this skill
-repository with background, reproduction steps, actual result, expected result,
-diagnosis, attempted fixes, impact, and suggested fix. If the blocker is later
-solved, comment with the root cause and resolution, then close the issue.
+repository only after repeating the repository identity gate and targeting the
+skill repository explicitly. Include background, reproduction steps, actual
+result, expected result, diagnosis, attempted fixes, impact, and suggested fix.
+If the blocker is later solved, comment with the root cause and resolution, then
+close the issue.

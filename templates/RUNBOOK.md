@@ -1,13 +1,13 @@
-# 医疗地图更新 Runbook
+﻿# 鍖荤枟鍦板浘鏇存柊 Runbook
 
-本文件服务于目标仓库的本地 `_local/` 工作区，不提交到目标仓库。
+鏈枃浠舵湇鍔′簬鐩爣浠撳簱鐨勬湰鍦?`_local/` 宸ヤ綔鍖猴紝涓嶆彁浜ゅ埌鐩爣浠撳簱銆?
 
-## 快速入口
+## 蹇€熷叆鍙?
 
-当用户要求执行医疗地图本地工作流时：
+褰撶敤鎴疯姹傛墽琛屽尰鐤楀湴鍥炬湰鍦板伐浣滄祦鏃讹細
 
-1. 确认当前目录是 clone 后的目标仓库根目录。
-2. 优先运行 preflight：
+1. 纭褰撳墠鐩綍鏄?clone 鍚庣殑鐩爣浠撳簱鏍圭洰褰曘€?
+2. 浼樺厛杩愯 preflight锛?
 
    ```bash
    bash ./_local/scripts/preflight-medical-workflow.sh --task-slug "update-medical-map-data-YYYYMMDD"
@@ -19,22 +19,22 @@
    .\_local\scripts\preflight-medical-workflow.ps1 -TaskSlug "update-medical-map-data-YYYYMMDD"
    ```
 
-3. 如果 preflight 更新了 skill 仓库，停止当前流程，重启 Codex 或重新开始任务后再继续。
-4. 读取 `_local/input/medical-feedback.csv`。
-5. 读取三个目标 JSON。
-6. 先输出整体分析和逐行处理方案。
-7. 等待用户人工批准后再修改 JSON。
-8. 只在用户明确要求时 commit、push 或创建 PR。
+3. 濡傛灉 preflight 鏇存柊浜?skill 浠撳簱锛屽仠姝㈠綋鍓嶆祦绋嬶紝閲嶅惎 Codex 鎴栭噸鏂板紑濮嬩换鍔″悗鍐嶇户缁€?
+4. 璇诲彇 `_local/input/medical-feedback.csv`銆?
+5. 璇诲彇涓変釜鐩爣 JSON銆?
+6. 鍏堣緭鍑烘暣浣撳垎鏋愬拰閫愯澶勭悊鏂规銆?
+7. 绛夊緟鐢ㄦ埛浜哄伐鎵瑰噯鍚庡啀淇敼 JSON銆?
+8. 鍙湪鐢ㄦ埛鏄庣‘瑕佹眰鏃?commit銆乸ush 鎴栧垱寤?PR銆?
 
-## 数据源规则
+## 鏁版嵁婧愯鍒?
 
-当前唯一入口：
+褰撳墠鍞竴鍏ュ彛锛?
 
 ```text
 _local/input/medical-feedback.csv
 ```
 
-不要再使用：
+涓嶈鍐嶄娇鐢細
 
 - `_local/input/medical-feedback.tsv`
 - `_local/.env`
@@ -43,57 +43,57 @@ _local/input/medical-feedback.csv
 - Service Account
 - OAuth
 - `pnpm sync:sheet`
-- 持久化代理配置
+- 鎸佷箙鍖栦唬鐞嗛厤缃?
 
-公开 CSV 链接默认使用已批准的工作流配置，也可由用户在运行脚本时覆盖。不要把原始 CSV、私密反馈或日志提交到目标仓库。
+鍏紑 CSV 閾炬帴榛樿浣跨敤宸叉壒鍑嗙殑宸ヤ綔娴侀厤缃紝涔熷彲鐢辩敤鎴峰湪杩愯鑴氭湰鏃惰鐩栥€備笉瑕佹妸鍘熷 CSV銆佺瀵嗗弽棣堟垨鏃ュ織鎻愪氦鍒扮洰鏍囦粨搴撱€?
 
-## Preflight 要求
+## Preflight 瑕佹眰
 
-preflight 必须：
+preflight 蹇呴』锛?
 
-- 检查 skill 仓库是否落后 upstream；如果自动 fast-forward 更新了 skill，立即停止并要求重启 Codex 或重新开始任务。
-- 检查已安装 Codex skill 目录中的 `.codex-skill-version.json` 是否等于远端 `main` 最新版本；如果不是最新，卸载并重装 `~/.codex/skills/qingshan-medical-map-data-update-skill` 后立即停止。
-- 如果 skill 仓库有本地改动，停止并报告，不能自动覆盖。
-- 确认目标仓库 root、`origin`、`git`、`gh auth status` 和 `node`。
-- 缺少 `_local/` 时自动创建本地工作区并同步 CSV。
-- 切到 `main`，执行 `git pull --ff-only origin main`，再创建或切换到 `codex/<task-slug>` 分支。
-- GitHub 连接失败时，先在当前有代理的情况下尝试不走代理；直连失败后再尝试 `127.0.0.1:7890`。
+- 妫€鏌?skill 浠撳簱鏄惁钀藉悗 upstream锛涘鏋滆嚜鍔?fast-forward 鏇存柊浜?skill锛岀珛鍗冲仠姝㈠苟瑕佹眰閲嶅惎 Codex 鎴栭噸鏂板紑濮嬩换鍔°€?
+- 妫€鏌ュ凡瀹夎 Codex skill 鐩綍涓殑 `.codex-skill-version.json` 鏄惁绛変簬杩滅 `main` 鏈€鏂扮増鏈紱濡傛灉涓嶆槸鏈€鏂帮紝鍗歌浇骞堕噸瑁?`~/.codex/skills/qingshan-medical-map-data-update-skill` 鍚庣珛鍗冲仠姝€?
+- 濡傛灉 skill 浠撳簱鏈夋湰鍦版敼鍔紝鍋滄骞舵姤鍛婏紝涓嶈兘鑷姩瑕嗙洊銆?
+- 纭鐩爣浠撳簱 root銆乣origin`銆乣git`銆乣gh auth status` 鍜?`node`銆?
+- 缂哄皯 `_local/` 鏃惰嚜鍔ㄥ垱寤烘湰鍦板伐浣滃尯骞跺悓姝?CSV銆?
+- 浠?`upstream/main` 鍚屾鏈湴 `main`锛屽啀鍒涘缓鎴栧垏鎹㈠埌 `codex/<task-slug>` 鍒嗘敮锛屼笉 push `origin/main`銆?
+- GitHub 杩炴帴澶辫触鏃讹紝鍏堝湪褰撳墠鏈変唬鐞嗙殑鎯呭喌涓嬪皾璇曚笉璧颁唬鐞嗭紱鐩磋繛澶辫触鍚庡啀灏濊瘯 `127.0.0.1:7890`銆?
 
-## 处理原则
+## 澶勭悊鍘熷垯
 
-- `未更新` 行是默认处理候选。
-- `已更新` 行默认只统计和跳过，不做查重或逐行方案；只有用户要求 audit 时才展开。
-- `无效信息` 默认报告并跳过，除非用户明确批准处理。
-- `分类` 只作初筛，目标文件还要结合地区、医院、科室、医生、诊疗方向和备注判断。
-- `shares` 永远由用户手动维护；Codex 不新增、不修改、不删除。
-- 没有医生姓名但信息有效时，优先考虑医院级 `notes`，不要生成占位医生。
-- `capacity` 只追加明确支持项，不因为新信息较少而覆盖或删除旧值。
-- `notes` 必须面向地图用户，去掉截图状态、内部审核判断和聊天口吻。
+- `鏈洿鏂癭 琛屾槸榛樿澶勭悊鍊欓€夈€?
+- `宸叉洿鏂癭 琛岄粯璁ゅ彧缁熻鍜岃烦杩囷紝涓嶅仛鏌ラ噸鎴栭€愯鏂规锛涘彧鏈夌敤鎴疯姹?audit 鏃舵墠灞曞紑銆?
+- `鏃犳晥淇℃伅` 榛樿鎶ュ憡骞惰烦杩囷紝闄ら潪鐢ㄦ埛鏄庣‘鎵瑰噯澶勭悊銆?
+- `鍒嗙被` 鍙綔鍒濈瓫锛岀洰鏍囨枃浠惰繕瑕佺粨鍚堝湴鍖恒€佸尰闄€佺瀹ゃ€佸尰鐢熴€佽瘖鐤楁柟鍚戝拰澶囨敞鍒ゆ柇銆?
+- `shares` 姘歌繙鐢辩敤鎴锋墜鍔ㄧ淮鎶わ紱Codex 涓嶆柊澧炪€佷笉淇敼銆佷笉鍒犻櫎銆?
+- 娌℃湁鍖荤敓濮撳悕浣嗕俊鎭湁鏁堟椂锛屼紭鍏堣€冭檻鍖婚櫌绾?`notes`锛屼笉瑕佺敓鎴愬崰浣嶅尰鐢熴€?
+- `capacity` 鍙拷鍔犳槑纭敮鎸侀」锛屼笉鍥犱负鏂颁俊鎭緝灏戣€岃鐩栨垨鍒犻櫎鏃у€笺€?
+- `notes` 蹇呴』闈㈠悜鍦板浘鐢ㄦ埛锛屽幓鎺夋埅鍥剧姸鎬併€佸唴閮ㄥ鏍稿垽鏂拰鑱婂ぉ鍙ｅ惢銆?
 
-目标文件一般规则：
+鐩爣鏂囦欢涓€鑸鍒欙細
 
-- 国内成人或泛用资源：`src/_data/medicalData.json`
-- 儿童/青少年相关资源：`src/_data/medicalChildData.json`
-- 海外或境外资源：`src/_data/medicalAbroadData.json`
+- 鍥藉唴鎴愪汉鎴栨硾鐢ㄨ祫婧愶細`src/_data/medicalData.json`
+- 鍎跨/闈掑皯骞寸浉鍏宠祫婧愶細`src/_data/medicalChildData.json`
+- 娴峰鎴栧澶栬祫婧愶細`src/_data/medicalAbroadData.json`
 
-## 修改前必须输出方案
+## 淇敼鍓嶅繀椤昏緭鍑烘柟妗?
 
-实际编辑 JSON 前，对默认候选行逐行给出：
+瀹為檯缂栬緫 JSON 鍓嶏紝瀵归粯璁ゅ€欓€夎閫愯缁欏嚭锛?
 
-1. CSV 序号。
-2. 目标文件。
-3. 新增还是合并。
-4. 目标 area / hospital / doctor。
-5. `capacity` 处理方式。
-6. `notes` 准备写入的文本。
-7. 不更新时的原因。
-8. 风险或不确定点。
+1. CSV 搴忓彿銆?
+2. 鐩爣鏂囦欢銆?
+3. 鏂板杩樻槸鍚堝苟銆?
+4. 鐩爣 area / hospital / doctor銆?
+5. `capacity` 澶勭悊鏂瑰紡銆?
+6. `notes` 鍑嗗鍐欏叆鐨勬枃鏈€?
+7. 涓嶆洿鏂版椂鐨勫師鍥犮€?
+8. 椋庨櫓鎴栦笉纭畾鐐广€?
 
-等待用户明确批准后才能修改 JSON。
+绛夊緟鐢ㄦ埛鏄庣‘鎵瑰噯鍚庢墠鑳戒慨鏀?JSON銆?
 
-## 检查
+## 妫€鏌?
 
-JSON 修改后至少运行：
+JSON 淇敼鍚庤嚦灏戣繍琛岋細
 
 ```bash
 node -e "for (const f of ['src/_data/medicalData.json','src/_data/medicalChildData.json','src/_data/medicalAbroadData.json']) { const text = require('fs').readFileSync(f,'utf8').replace(/^\uFEFF/, ''); JSON.parse(text); console.log(f + ' OK'); }"
@@ -101,34 +101,34 @@ git diff --check
 git status --short --branch
 ```
 
-## 目标仓库边界
+## 鐩爣浠撳簱杈圭晫
 
-目标仓库只允许提交：
+鐩爣浠撳簱鍙厑璁告彁浜わ細
 
-- `.gitignore` 中忽略 `/_local/` 的规则。
-- 经人工批准后的 `src/_data/*.json` 数据变更。
+- `.gitignore` 涓拷鐣?`/_local/` 鐨勮鍒欍€?
+- 缁忎汉宸ユ壒鍑嗗悗鐨?`src/_data/*.json` 鏁版嵁鍙樻洿銆?
 
-目标仓库不要提交：
+鐩爣浠撳簱涓嶈鎻愪氦锛?
 
 - `.codex/`
 - `_local/`
-- 同步脚本
-- package 文件或 lockfile
+- 鍚屾鑴氭湰
+- package 鏂囦欢鎴?lockfile
 - CSV / TSV
-- 日志
+- 鏃ュ織
 - `.env`
-- 凭据
-- 代理配置
+- 鍑嵁
+- 浠ｇ悊閰嶇疆
 - git hook
 - `pnpm-workspace.yaml`
 
-提交前必须检查：
+鎻愪氦鍓嶅繀椤绘鏌ワ細
 
 ```bash
 git diff --cached --name-only
 ```
 
-医疗数据提交只能包含三份 JSON：
+鍖荤枟鏁版嵁鎻愪氦鍙兘鍖呭惈涓変唤 JSON锛?
 
 ```text
 src/_data/medicalData.json
@@ -138,57 +138,73 @@ src/_data/medicalAbroadData.json
 
 ## Publishing PRs
 
-Default to no push and no PR. Only commit, push, create a PR, or merge when the
-user explicitly asks.
+Default to no push and no PR. Only commit, push, or create a Draft PR when the
+user explicitly asks. Before any GitHub write, report `git remote -v`,
+`git branch --show-current`, `gh repo view --json nameWithOwner,defaultBranchRef`,
+`origin`, `upstream`, the target operation, and whether it writes to a remote.
+Stop if the repository identity is unclear.
 
-Use one short-lived branch per task:
+Repository roles: `upstream` is the production repository and read-only for
+AI/Codex; `origin` is the user's fork and writable only for
+`codex/<task-slug>`; `main` is never directly modified by AI/Codex. Use one
+short-lived branch per task:
 
 ```bash
+git fetch upstream
 git switch main
-git pull --ff-only origin main
-git switch -c codex/<task-slug>
+git reset --hard upstream/main
+git switch -c codex/<task-slug> upstream/main
 ```
 
-Before creating a PR:
+Stop before `git reset --hard upstream/main` if the worktree is dirty or local
+`main` has commits that are not in `upstream/main`. Do not push `origin/main`.
+
+Before creating a Draft PR:
 
 ```bash
-git fetch origin main
-git merge-base --is-ancestor origin/main HEAD
-git rev-list --count origin/main..HEAD
-git log --oneline origin/main..HEAD
+git fetch upstream
+git switch codex/<task-slug>
+git rebase upstream/main
+git status
 git diff --cached --name-only
 ```
 
-If `origin/main` advances, rebase instead of merging main into the PR branch:
+If rebase produces conflicts, stop and report the conflicted files. After a
+successful rebase, push only to the fork task branch:
 
 ```bash
-git fetch origin main
-git rebase origin/main
-git push --force-with-lease
+git push --force-with-lease origin codex/<task-slug>
 ```
 
-Never use `git merge origin/main`, `gh pr merge --merge`, or a GitHub "Update
-branch" action that creates a merge commit. Keep medical map PR history linear.
+`git push --force-with-lease` is allowed only for `origin/codex/<task-slug>`.
+Never use it for `upstream`, `origin/main`, or any default branch. Never use
+`git merge upstream/main`, `git merge origin/main`, `gh pr merge --merge`, or a
+GitHub "Update branch" action that creates a merge commit. Keep medical map PR
+history linear on top of `upstream/main`.
 
 Keep PR bodies reviewer-facing: committed JSON changes, map-user-visible impact,
 committed-file validation, and `Please use squash merge when this PR is ready.`
 Do not include `_local/`, CSV sync details, row-count bookkeeping, local tool
 failures, proxy recovery, or uncommitted logs.
 
-Before merge:
+Draft PRs must be from `origin/codex/<task-slug>` to `upstream/main`. Merging is
+a human-maintainer action. Do not run `gh pr merge`. For a Ready for review or
+merge readiness check:
 
 ```bash
-git fetch origin main
-git merge-base --is-ancestor origin/main HEAD
-git rev-list --count origin/main..HEAD
-git log --oneline --graph origin/main..HEAD
+git fetch upstream
+git switch codex/<task-slug>
+git rebase upstream/main
+git status
+git log --oneline --graph --decorate --all -20
 gh pr view <PR> --json mergeStateStatus,isDraft,state,statusCheckRollup
 gh pr checks <PR>
 ```
 
-Merge only when the PR is not draft, the merge state is clean or equivalently
-mergeable, required/relevant checks pass, and the graph contains no merge
-commit. Stop on pending or failed checks.
+Confirm the current branch is `codex/<task-slug>`, the PR branch is based on
+latest `upstream/main`, there are no merge commits, there are no uncommitted
+changes, the diff only contains task-related changes, and CI has passed or the
+blocker is explained.
 
 Final integration must use squash merge:
 
@@ -196,12 +212,14 @@ Final integration must use squash merge:
 gh pr merge <PR> --squash --delete-branch
 ```
 
-After merge:
+The command above is for the human maintainer to run after review and passing CI.
+AI/Codex must not run it, close PRs, delete remote branches, or merge directly to
+`upstream/main`. After a human Squash merge:
 
 ```bash
 gh pr view <PR> --json state,mergeCommit
-git fetch origin main --prune
+git fetch upstream main --prune
 git switch main
-git pull --ff-only origin main
+git reset --hard upstream/main
 git branch -d codex/<task-slug>
 ```

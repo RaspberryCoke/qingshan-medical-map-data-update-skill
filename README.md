@@ -10,6 +10,8 @@ map JSON, and apply only manually approved data updates.
 ## What This Is Not
 
 - Not a fully automated repository editing tool.
+- Not a permission boundary for production repositories; draft PRs still require
+  repository identity checks and human-controlled merge permissions.
 - Not a cloud sync service.
 - Not a replacement for human review.
 - Not a Google API, Service Account, OAuth, `.env`, persistent proxy, or pnpm
@@ -29,6 +31,8 @@ map JSON, and apply only manually approved data updates.
   - `src/_data/medicalData.json`
   - `src/_data/medicalChildData.json`
   - `src/_data/medicalAbroadData.json`
+- `origin` configured as the user's fork and `upstream` configured as the
+  production repository.
 - A Google Sheet already published to the web as a public CSV URL.
 
 Run all setup commands from the cloned target repository root:
@@ -36,6 +40,7 @@ Run all setup commands from the cloned target repository root:
 ```bash
 git clone <target-repo-url>
 cd <target-repo>
+git remote add upstream <production-repo-url>
 ```
 
 The scripts intentionally stop if the current directory does not look like the
@@ -101,13 +106,18 @@ The preflight script:
   only `~/.codex/skills/qingshan-medical-map-data-update-skill` from the remote
   repository's tracked files, then stops so Codex can reload the updated skill.
 - Stops when the skill repository has local changes.
-- Confirms the target repository root, `origin`, required tools, and `gh auth
-  status`.
+- Confirms the target repository root, `origin` as a fork, `upstream` as the
+  production repository, required tools, and `gh auth status`.
+- Confirms the GitHub repository identity with `gh repo view --json
+  nameWithOwner,defaultBranchRef` and reports the current repository, current
+  branch, `origin`, `upstream`, default branch, and that preflight performs no
+  remote write.
 - Initializes missing `_local/` directories and syncs
   `_local/input/medical-feedback.csv` from the approved/default public CSV URL
   when the CSV is missing.
-- Switches the target repository to latest `main` and creates or switches to a
-  normalized `codex/<task-slug>` branch.
+- Fetches latest `upstream/main`, refreshes local `main`, and creates or
+  switches to a normalized `codex/<task-slug>` branch based on `upstream/main`
+  without pushing `origin/main`.
 - On GitHub connection failures, retries once without proxy when proxy
   variables are set, then tries `127.0.0.1:7890` when reachable.
 
